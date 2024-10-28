@@ -94,7 +94,7 @@ Properties SMAA::getProperties() const
 
 RenderPassReflection SMAA::reflect(const CompileData& compileData)
 {
-    auto outFormat = ResourceFormat::RGBA8UnormSrgb;
+    auto outFormat = ResourceFormat::Unknown; // back buffer format
 
     RenderPassReflection reflector;
     reflector.addInput(kColorIn, "Color Input").bindFlags(ResourceBindFlags::ShaderResource);
