@@ -34,6 +34,7 @@ namespace
     const std::string kVBuffer = "vbuffer";
     const std::string kColor = "color";
     const std::string kVisBuffer = "visibilityBuffer";
+    const std::string kRayDir = "rayDir";
 
     const std::string kAmbientIntensity = "ambientIntensity";
     const std::string kEnvMapIntensity = "envMapIntensity";
@@ -75,8 +76,9 @@ RenderPassReflection VBufferLighting::reflect(const CompileData& compileData)
 {
     RenderPassReflection reflector;
     reflector.addInput(kVBuffer, "vbuffer");
+    reflector.addInput(kRayDir, "in view direction");
     reflector.addInput(kVisBuffer, "Visibility buffer used for shadowing. Range is [0,1] where 0 means the pixel is fully-shadowed and 1 means the pixel is not shadowed at all").flags(RenderPassReflection::Field::Flags::Optional).texture2D(0, 0, 1, 1, 0);
-    reflector.addOutput(kColor, "Color texture");
+    reflector.addOutput(kColor, "Color texture").format(ResourceFormat::RGBA32Float);
 
     return reflector;
 }
@@ -88,10 +90,12 @@ void VBufferLighting::execute(RenderContext* pRenderContext, const RenderData& r
     auto pColor = renderData[kColor]->asTexture();
     auto pVBuffer = renderData[kVBuffer]->asTexture();
     auto pVisBuffer = renderData[kVisBuffer]->asTexture();
+    auto pRayDir = renderData[kRayDir]->asTexture();
 
     mpFbo->attachColorTarget(pColor, 0);
     auto vars = mpPass->getRootVar();
     vars["vbuffer"] = pVBuffer;
+    vars["rayDir"] = pRayDir;
     vars["visibilityBuffer"] = pVisBuffer;
 
     if (mDirty)

@@ -8,6 +8,7 @@ import Rendering.Materials.Fresnel;
 
 Texture2D<float> visibilityBuffer;
 Texture2D<PackedHitInfo> vbuffer;
+Texture2D<float4> rayDir;
 
 cbuffer ConstantCB
 {
@@ -73,10 +74,10 @@ float4 main(float2 texC : TEXCOORD, float4 svPos : SV_POSITION) : SV_TARGET
     const HitInfo hit = HitInfo(vbuffer[pixel]);
 
     float3 color = 0.0;
+    float3 viewDir = -rayDir[pixel].xyz;
     if (hit.isValid()) // valid hit
     {
         // Load shading data.
-        float3 viewDir = -gScene.camera.computeRayPinhole(pixel, frameDim).dir;
         VertexData v = { };
         uint materialID = { };
         if (hit.getType() != HitType::Triangle)
@@ -128,8 +129,8 @@ float4 main(float2 texC : TEXCOORD, float4 svPos : SV_POSITION) : SV_TARGET
             AnalyticLightSample ls;
             evalLightApproximate(sd.posW, gScene.getLight(i), ls);
             float shadow = 1.0;
-            if (i == 0)
-                shadow = visibilityBuffer[pixel];
+            //if (i == 0)
+            //    shadow = visibilityBuffer[pixel];
 
         
             color += shadow * mi.eval(sd, ls.dir, sg) * ls.Li;
@@ -141,13 +142,14 @@ float4 main(float2 texC : TEXCOORD, float4 svPos : SV_POSITION) : SV_TARGET
     else // invalid hit => envmap
     {
         // get camera ray from pixel
-        let data = gScene.camera.data;
+        /*let data = gScene.camera.data;
         float2 ndc = float2(2, -2) * texC + float2(-1, 1);
         float3 dir = ndc.x * data.cameraU + ndc.y * data.cameraV + data.cameraW;
         dir = normalize(dir);
 
         // lookup dir in envmap
-        color = gScene.envMap.eval(dir) * gEnvMapIntensity;
+        color = gScene.envMap.eval(dir) * gEnvMapIntensity;*/
+        color = gScene.envMap.eval(-viewDir) * gEnvMapIntensity;
     }
     return float4(color, 1.f);
 }

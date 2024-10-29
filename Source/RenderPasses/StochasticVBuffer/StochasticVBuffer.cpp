@@ -33,9 +33,10 @@ namespace
     const std::string kRayDiffs = "duv"; // uv differentials
     const std::string kMotion = "mvec";
     const std::string kRayDir = "rayDir";
+    const std::string kRayDist = "rayDist";
 
-    const uint32_t kMaxPayloadSizeBytes = 4;
-    const std::string kProgramRaytraceFile = "RenderPasses/StochasticVBuffer/StochasticVBuffer.rt.hlsl";
+    const uint32_t kMaxPayloadSizeBytes = 20; // 16 byte hit info + 4 byte distance
+    const std::string kProgramRaytraceFile = "RenderPasses/StochasticVBuffer/StochasticVBuffer.rt.slang";
 }
 
 extern "C" FALCOR_API_EXPORT void registerPlugin(Falcor::PluginRegistry& registry)
@@ -46,6 +47,7 @@ extern "C" FALCOR_API_EXPORT void registerPlugin(Falcor::PluginRegistry& registr
 StochasticVBuffer::StochasticVBuffer(ref<Device> pDevice, const Properties& props)
     : RenderPass(pDevice)
 {
+    mpSampleGenerator = SampleGenerator::create(mpDevice, SAMPLE_GENERATOR_UNIFORM);
 }
 
 Properties StochasticVBuffer::getProperties() const
@@ -60,7 +62,8 @@ RenderPassReflection StochasticVBuffer::reflect(const CompileData& compileData)
     reflector.addOutput(kVbuffer, "V-buffer").format(HitInfo::kDefaultFormat);
     reflector.addOutput(kMotion, "Motion vector").format(ResourceFormat::RG32Float);
     reflector.addOutput(kRayDiffs, "Ray differentials (dUVdx, dUVdy)").format(ResourceFormat::RGBA32Float);
-    reflector.addOutput(kRayDir, "incomming camera ray direction").format(ResourceFormat::RG32Float);
+    reflector.addOutput(kRayDir, "incomming camera ray direction").format(ResourceFormat::RGBA32Float);
+    reflector.addOutput(kRayDist, "distance to the hit").format(ResourceFormat::R32Float);
     return reflector;
 }
 
@@ -74,12 +77,15 @@ void StochasticVBuffer::execute(RenderContext* pRenderContext, const RenderData&
     auto pMotion = renderData[kMotion]->asTexture();
     auto pRayDiffs = renderData[kRayDiffs]->asTexture();
     auto pRayDir = renderData[kRayDir]->asTexture();
+    auto pRayDist = renderData[kRayDist]->asTexture();
 
     auto var = mpVars->getRootVar();
     var["gVBuffer"] = pVbuffer;
+    var["gRayDir"] = pRayDir;
     var["gMotion"] = pMotion;
     var["gRayDiffs"] = pRayDiffs;
-    var["gRayDir"] = pRayDir;
+    var["gRayDist"] = pRayDist;
+    var["PerFrame"]["gFrameCount"] = mFrameCount++;
 
     uint3 dispatch = uint3(1);
     dispatch.x = pVbuffer->getWidth();

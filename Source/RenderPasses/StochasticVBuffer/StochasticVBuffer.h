@@ -57,4 +57,5 @@ private:
     ref<RtProgram> mpProgram;
     ref<RtProgramVars> mpVars;
     ref<SampleGenerator> mpSampleGenerator;
+    uint mFrameCount = 0;
 };
