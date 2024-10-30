@@ -62,8 +62,8 @@ void anyHit(inout TraceData rayData : SV_RayPayload, BuiltInTriangleIntersection
     GeometryInstanceID instanceID = getGeometryInstanceID();
     VertexData v = getVertexData(instanceID, PrimitiveIndex(), attribs);
     uint materialID = gScene.getMaterialID(instanceID);
-    //if (gScene.materials.alphaTest(v, materialID, 0.f))
-    //    IgnoreHit();
+    if (gScene.materials.alphaTest(v, materialID, 0.f))
+        IgnoreHit();
 }
 
 [shader("closesthit")]
@@ -77,6 +77,19 @@ void closestHit(inout TraceData rayData : SV_RayPayload, BuiltInTriangleIntersec
     rayData.packedHitInfo = HitInfo(triangleHit).getData();
 }
 
+float2 calcMotionVector(uint2 pixel, uint2 frameDim, HitInfo hitInfo)
+{
+    if(!hitInfo.isValid()) return 0.0;
+    
+    const TriangleHit triangleHit = hitInfo.getTriangleHit();
+    //VertexData v = gScene.getVertexData(triangleHit);
+    float3 prevPosW = gScene.getPrevPosW(triangleHit);
+
+    float2 pixelPos = float2(pixel) + 0.5;
+    float4 prevPosH = mul(gScene.camera.data.prevViewProjMatNoJitter, float4(prevPosW, 1.0));
+    return calcMotionVector(pixelPos, prevPosH, frameDim) + float2(gScene.camera.data.jitterX, -gScene.camera.data.jitterY); // Remove camera jitter from motion vector
+}
+
 [shader("raygeneration")]
 void rayGen()
 {
@@ -87,13 +100,17 @@ void rayGen()
     SampleGenerator sg = SampleGenerator(pixel, gFrameCount);
 
     TraceData data = TraceData::create();
+    HitInfo hitInfo;
+    float2 motionVector = 0.0;
     for (uint i = 0; i < 8; ++i)
     {
 
         TraceRay(gScene.rtAccel, RAY_FLAG_NONE, 0xff, 0, rayTypeCount, 0, ray.toRayDesc(), data);
 
         // for now take and write this hitpoint
-        HitInfo hitInfo = HitInfo(data.packedHitInfo);
+        hitInfo = HitInfo(data.packedHitInfo);
+        if(i == 0) motionVector = calcMotionVector(pixel, frameDim, hitInfo); // calc motion vector for the first hit
+
         if(!hitInfo.isValid()) break;
         let lod = ExplicitLodTextureSampler(0.f);
         ShadingData sd = loadShadingData(hitInfo, ray.dir, lod);
@@ -118,7 +135,8 @@ void rayGen()
 
     gVBuffer[pixel] = data.packedHitInfo;
     gRayDir[pixel] = float4(ray.dir, 0.0);
-    // gMotion;
+    gMotion[pixel] = motionVector;
+    
     // gRayDiffs;
     gRayDist[pixel] = data.distance;
 
