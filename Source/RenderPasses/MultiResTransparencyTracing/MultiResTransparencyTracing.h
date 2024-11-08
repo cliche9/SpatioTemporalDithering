@@ -59,12 +59,16 @@ private:
     ref<SampleGenerator> mpSampleGenerator;
     uint mFrameCount = 0;
 
+    ref<ComputePass> mpPullProgram;
+
     ref<Scene> mpScene;
 
     float mEnvMapIntensity = 0.25f;
     float mAmbientIntensity = 0.25f;
     float mLightIntensity = 0.5f;
     uint mShadowRay = 1;
+
+    bool mDoMultiRes = false;
 
     std::vector<float> mThresholds;
 };

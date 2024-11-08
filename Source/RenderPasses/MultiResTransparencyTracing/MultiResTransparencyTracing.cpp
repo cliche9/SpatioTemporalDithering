@@ -35,6 +35,7 @@ namespace
 
     const uint32_t kMaxPayloadSizeBytes = 20; // 16 byte hit info + 4 byte distance
     const std::string kProgramRaytraceFile = "RenderPasses/MultiResTransparencyTracing/MultiResTransparencyTracing.rt.slang";
+    const std::string kProgramPullFile = "RenderPasses/MultiResTransparencyTracing/Pull.cs.slang";
 }
 
 extern "C" FALCOR_API_EXPORT void registerPlugin(Falcor::PluginRegistry& registry)
@@ -46,11 +47,14 @@ MultiResTransparencyTracing::MultiResTransparencyTracing(ref<Device> pDevice, co
     : RenderPass(pDevice)
 {
     mpSampleGenerator = SampleGenerator::create(mpDevice, SAMPLE_GENERATOR_UNIFORM);
-    mThresholds = { 0.5f, 0.25f, 0.01f };
+    mThresholds = { 0.5f, 0.01f };
 
     Sampler::Desc desc;
     desc.setFilterMode(Sampler::Filter::Linear, Sampler::Filter::Linear, Sampler::Filter::Linear);
     mpLinearSampler = Sampler::create(mpDevice, desc);
+
+    DefineList defines;
+    mpPullProgram = ComputePass::create(mpDevice, kProgramPullFile, "main", defines);
 }
 
 Properties MultiResTransparencyTracing::getProperties() const
@@ -60,7 +64,7 @@ Properties MultiResTransparencyTracing::getProperties() const
 
 RenderPassReflection MultiResTransparencyTracing::reflect(const CompileData& compileData)
 {
-    auto numMips = 3;
+    auto numMips = mThresholds.size();
     // Define the required resources here
     RenderPassReflection reflector;
     auto colorFormat = ResourceFormat::RGBA16Float;
@@ -115,28 +119,44 @@ void MultiResTransparencyTracing::execute(RenderContext* pRenderContext, const R
         }
 
         var["PerFrame"]["gResMultiplier"] = resMultiplier;
-        var["PerFrame"]["gVisibilityThreshold"] = mThresholds[level];
+        var["PerFrame"]["gVisibilityThreshold"] = mDoMultiRes ? mThresholds[level] : 0.01f;
 
         mpScene->raytrace(pRenderContext, mpProgram.get(), mpVars, dispatch);
+
+        if (!mDoMultiRes) break;
     }
     
-    
+    if(mDoMultiRes)
+    {
+        auto cvar = mpPullProgram->getRootVar();
+        for (uint level = mThresholds.size() - 1u; level > 0; --level)
+        {
+            FALCOR_PROFILE(pRenderContext, "Pull" + std::to_string(level));
 
-    // TODO upsampling
+            cvar["gColor"].setUav(pColorTmp->getUAV(level - 1));
+            cvar["gRayT"].setUav(pRayT->getUAV(level - 1));
+            cvar["gColorPrev"].setSrv(pColorTmp->getSRV(level));
+            cvar["gRayTPrev"].setSrv(pRayT->getSRV(level));
+
+            mpPullProgram->execute(pRenderContext, pColorTmp->getWidth(level - 1), pColorTmp->getHeight(level - 1) , 1);
+        }
+    }
 
     // copy final result to output
-    pRenderContext->blit(pColorTmp->getSRV(1, 1), pColorOut->getRTV());
+    pRenderContext->blit(pColorTmp->getSRV(0, 1), pColorOut->getRTV());
 }
 
 void MultiResTransparencyTracing::renderUI(Gui::Widgets& widget)
 {
-    
+    widget.checkbox("Enable Multi-Res", mDoMultiRes);
+
     widget.var("Ambient Intensity", mAmbientIntensity, 0.f, 100.f, 0.1f);
     widget.var("Env Map Intensity", mEnvMapIntensity, 0.f, 100.f, 0.1f);
     widget.var("Scene Light Intensity", mLightIntensity, 0.f, 100.f, 0.1f);
 
     
     widget.checkbox("Ray Shadows", reinterpret_cast<bool&>(mShadowRay));
+    
 }
 
 void MultiResTransparencyTracing::setScene(RenderContext* pRenderContext, const ref<Scene>& pScene)

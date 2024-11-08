@@ -272,11 +272,12 @@ float4 shadeFragment(const HitInfo hit, float3 viewDir, uint2 pixel, uint2 frame
 void rayGen()
 {
     uint2 pixel = DispatchRaysIndex().xy;
+    const uint2 id = pixel;
     uint2 frameDim = DispatchRaysDimensions().xy;
 
     float tMin = 0.0;
     float4 color = float4(0,0,0, 1); // RGB + visibility
-    if(gResMultiplier != 1)
+    [branch] if(gResMultiplier != 1)
     {
         // fetch the 4 pixels from the previous level
         float2 uv = (pixel + 0.5) / frameDim;
@@ -293,8 +294,8 @@ void rayGen()
         if(color.a <= 0.01)
         {
             // finish
-            gColor[pixel] = 0.0;
-            gRayT[pixel] = tMin;
+            gColor[id] = 0.0;
+            gRayT[id] = tMin;
             return;
         }
     }
@@ -324,6 +325,6 @@ void rayGen()
             break;
     }
     
-    gColor[pixel] = color;
-    gRayT[pixel] = ray.tMin;
+    gColor[id] = color;
+    gRayT[id] = ray.tMin;
 }
