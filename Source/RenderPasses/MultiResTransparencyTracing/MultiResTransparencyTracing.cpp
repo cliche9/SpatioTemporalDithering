@@ -46,6 +46,11 @@ MultiResTransparencyTracing::MultiResTransparencyTracing(ref<Device> pDevice, co
     : RenderPass(pDevice)
 {
     mpSampleGenerator = SampleGenerator::create(mpDevice, SAMPLE_GENERATOR_UNIFORM);
+    mThresholds = { 0.5f, 0.25f, 0.01f };
+
+    Sampler::Desc desc;
+    desc.setFilterMode(Sampler::Filter::Linear, Sampler::Filter::Linear, Sampler::Filter::Linear);
+    mpLinearSampler = Sampler::create(mpDevice, desc);
 }
 
 Properties MultiResTransparencyTracing::getProperties() const
@@ -76,9 +81,7 @@ void MultiResTransparencyTracing::execute(RenderContext* pRenderContext, const R
     auto pRayT = renderData[kRayT]->asTexture();
 
     auto var = mpVars->getRootVar();
-    var["gColor"].setUav(pColorTmp->getUAV(0));
-    var["gRayT"].setUav(pRayT->getUAV(0));
-
+    var["gSampler"] = mpLinearSampler;
     var["PerFrame"]["gFrameCount"] = mFrameCount++;
     var["PerFrame"]["gAmbientIntensity"] = mAmbientIntensity;
     var["PerFrame"]["gLightIntensity"] = mLightIntensity;
@@ -88,12 +91,41 @@ void MultiResTransparencyTracing::execute(RenderContext* pRenderContext, const R
     uint3 dispatch = uint3(1);
     dispatch.x = pColorTmp->getWidth();
     dispatch.y = pColorTmp->getHeight();
-    mpScene->raytrace(pRenderContext, mpProgram.get(), mpVars, dispatch);
+    var["PerFrame"]["gFullResolution"] = uint2(dispatch.x, dispatch.y);
+    uint resMultiplier = 1;
+    for(uint level = 0; level < mThresholds.size(); ++level)
+    {
+        FALCOR_PROFILE(pRenderContext, "Level" + std::to_string(level));
+
+        // write
+        var["gColor"].setUav(pColorTmp->getUAV(level));
+        var["gRayT"].setUav(pRayT->getUAV(level));
+
+        // read
+        ref<Texture> emptyTex;
+        var["gColorPrev"] = emptyTex;
+        var["gRayTPrev"] = emptyTex;
+        if (level > 0)
+        {
+            var["gColorPrev"].setSrv(pColorTmp->getSRV(level - 1));
+            var["gRayTPrev"].setSrv(pRayT->getSRV(level - 1));
+            dispatch.x = (dispatch.x + 1) / 2;
+            dispatch.y = (dispatch.y + 1) / 2;
+            resMultiplier *= 2;
+        }
+
+        var["PerFrame"]["gResMultiplier"] = resMultiplier;
+        var["PerFrame"]["gVisibilityThreshold"] = mThresholds[level];
+
+        mpScene->raytrace(pRenderContext, mpProgram.get(), mpVars, dispatch);
+    }
+    
+    
 
     // TODO upsampling
 
     // copy final result to output
-    pRenderContext->blit(pColorTmp->getSRV(0, 1), pColorOut->getRTV());
+    pRenderContext->blit(pColorTmp->getSRV(1, 1), pColorOut->getRTV());
 }
 
 void MultiResTransparencyTracing::renderUI(Gui::Widgets& widget)

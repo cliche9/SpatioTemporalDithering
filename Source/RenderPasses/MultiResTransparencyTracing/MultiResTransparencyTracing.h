@@ -52,6 +52,8 @@ public:
 private:
     void setupProgram();
 
+    ref<Sampler> mpLinearSampler;
+
     ref<RtProgram> mpProgram;
     ref<RtProgramVars> mpVars;
     ref<SampleGenerator> mpSampleGenerator;
@@ -63,4 +65,6 @@ private:
     float mAmbientIntensity = 0.25f;
     float mLightIntensity = 0.5f;
     uint mShadowRay = 1;
+
+    std::vector<float> mThresholds;
 };

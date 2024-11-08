@@ -20,10 +20,17 @@ cbuffer PerFrame
     float gEnvMapIntensity;
     float gLightIntensity;
     uint gShadowRay; // bool
+    float gVisibilityThreshold;
+    uint gResMultiplier;
+    uint2 gFullResolution;
 }
 
 RWTexture2D<float4> gColor;
 RWTexture2D<float> gRayT;
+Texture2D<float4> gColorPrev;
+Texture2D<float> gRayTPrev;
+
+SamplerState gSampler;
 
 struct TraceData
 {
@@ -267,13 +274,38 @@ void rayGen()
     uint2 pixel = DispatchRaysIndex().xy;
     uint2 frameDim = DispatchRaysDimensions().xy;
 
+    float tMin = 0.0;
+    float4 color = float4(0,0,0, 1); // RGB + visibility
+    if(gResMultiplier != 1)
+    {
+        // fetch the 4 pixels from the previous level
+        float2 uv = (pixel + 0.5) / frameDim;
+        // (-,+),(+,+),(+,-),(-,-)
+        float4 prevT = gRayTPrev.GatherRed(gSampler, uv);
+        float4 prevVis = gColorPrev.GatherAlpha(gSampler, uv);
+
+        // choose one of the 4 pixels
+        tMin = prevT.w;
+        color.a = prevVis.w;
+        frameDim = gFullResolution;
+        pixel = pixel * gResMultiplier;
+
+        if(color.a <= 0.01)
+        {
+            // finish
+            gColor[pixel] = 0.0;
+            gRayT[pixel] = tMin;
+            return;
+        }
+    }
+
     Ray ray = gScene.camera.computeRayPinhole(pixel, frameDim);
+    ray.tMin = tMin; // start from previous hitpoint
     SampleGenerator sg = SampleGenerator(pixel, gFrameCount);
 
     TraceData data = TraceData::create();
     HitInfo hitInfo;
 
-    float4 color = float4(0,0,0, 1); // RGB + visibility
 
     for (uint i = 0; i < 64; ++i)
     {
@@ -288,7 +320,7 @@ void rayGen()
         color.rgb += color.a * fcolor.a * fcolor.rgb;
         color.a *= 1.0 - fcolor.a;
 
-        if(color.a < 0.01)
+        if(color.a < gVisibilityThreshold)
             break;
     }
     
