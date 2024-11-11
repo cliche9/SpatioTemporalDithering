@@ -68,7 +68,7 @@ private:
     float mLightIntensity = 0.5f;
     uint mShadowRay = 1;
 
-    bool mDoMultiRes = false;
+    bool mDoMultiRes = true;
 
     std::vector<float> mThresholds;
 };

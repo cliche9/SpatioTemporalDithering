@@ -47,7 +47,7 @@ MultiResTransparencyTracing::MultiResTransparencyTracing(ref<Device> pDevice, co
     : RenderPass(pDevice)
 {
     mpSampleGenerator = SampleGenerator::create(mpDevice, SAMPLE_GENERATOR_UNIFORM);
-    mThresholds = { 0.5f, 0.01f };
+    mThresholds = { 0.5f, 0.25f, 0.0f };
 
     Sampler::Desc desc;
     desc.setFilterMode(Sampler::Filter::Linear, Sampler::Filter::Linear, Sampler::Filter::Linear);
@@ -99,6 +99,7 @@ void MultiResTransparencyTracing::execute(RenderContext* pRenderContext, const R
     dispatch.y = pColorTmp->getHeight();
     var["PerFrame"]["gFullResolution"] = uint2(dispatch.x, dispatch.y);
     uint resMultiplier = 1;
+    uint maxThreshold = 0;
     for(uint level = 0; level < mThresholds.size(); ++level)
     {
         FALCOR_PROFILE(pRenderContext, "Level" + std::to_string(level));
@@ -121,17 +122,19 @@ void MultiResTransparencyTracing::execute(RenderContext* pRenderContext, const R
         }
 
         var["PerFrame"]["gResMultiplier"] = resMultiplier;
-        var["PerFrame"]["gVisibilityThreshold"] = mDoMultiRes ? mThresholds[level] : 0.01f;
+        var["PerFrame"]["gVisibilityThreshold"] = mDoMultiRes ? std::max(mThresholds[level], 0.01f) : 0.01f;
 
         mpScene->raytrace(pRenderContext, mpProgram.get(), mpVars, dispatch);
 
+        ++maxThreshold;
         if (!mDoMultiRes) break;
+        if (mThresholds[level] <= 0.01f) break; // this was the last threshold to consider
     }
     
     if(mDoMultiRes)
     {
         auto cvar = mpPullProgram->getRootVar();
-        for (uint level = mThresholds.size() - 1u; level > 0; --level)
+        for (uint level = maxThreshold - 1; level > 0; --level)
         {
             FALCOR_PROFILE(pRenderContext, "Pull" + std::to_string(level));
 
@@ -156,6 +159,9 @@ void MultiResTransparencyTracing::renderUI(Gui::Widgets& widget)
     widget.var("Env Map Intensity", mEnvMapIntensity, 0.f, 100.f, 0.1f);
     widget.var("Scene Light Intensity", mLightIntensity, 0.f, 100.f, 0.1f);
 
+    widget.slider("Threshold 1", mThresholds[0], 0.0f, 1.0f);
+    widget.slider("Threshold 2", mThresholds[1], 0.0f, 1.0f);
+    widget.slider("Threshold 3", mThresholds[2], 0.0f, 1.0f);
     
     widget.checkbox("Ray Shadows", reinterpret_cast<bool&>(mShadowRay));
     

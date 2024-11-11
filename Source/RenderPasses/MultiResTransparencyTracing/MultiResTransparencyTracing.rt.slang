@@ -291,7 +291,7 @@ void rayGen()
         // choose one of the 4 pixels
         tMin = prevT[0];
         prevVisibility = prevVis[0];
-        pixel = id * gResMultiplier + offsets[0];
+        pixel = id * gResMultiplier + offsets[0] * (gResMultiplier / 2u);
 
         [unroll]for (uint i = 0; i < 4; ++i)
         {
@@ -340,6 +340,8 @@ void rayGen()
         if (prevVisibility * color.a < gVisibilityThreshold)
             break;
     }
+
+    color.a *= prevVisibility;
     
     gColor[id] = color;
     gRayT[id] = ray.tMin;
