@@ -276,7 +276,8 @@ void rayGen()
     uint2 frameDim = DispatchRaysDimensions().xy;
 
     float tMin = 0.0;
-    float4 color = float4(0,0,0, 1); // RGB + visibility
+    float4 color = float4(0, 0, 0, 1); // RGB + visibility
+    float prevVisibility = 1.0;
     [branch] if(gResMultiplier != 1)
     {
         // fetch the 4 pixels from the previous level
@@ -287,11 +288,11 @@ void rayGen()
 
         // choose one of the 4 pixels
         tMin = prevT.w;
-        color.a = prevVis.w;
+        prevVisibility = prevVis.w;
         frameDim = gFullResolution;
         pixel = pixel * gResMultiplier;
 
-        if(color.a <= 0.01)
+        if (prevVisibility <= 0.01)
         {
             // finish
             gColor[id] = 0.0;
@@ -321,7 +322,7 @@ void rayGen()
         color.rgb += color.a * fcolor.a * fcolor.rgb;
         color.a *= 1.0 - fcolor.a;
 
-        if(color.a < gVisibilityThreshold)
+        if (prevVisibility * color.a < gVisibilityThreshold)
             break;
     }
     
