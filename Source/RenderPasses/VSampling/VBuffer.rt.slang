@@ -239,6 +239,11 @@ void rayGen()
     float3 emission = 0.0; // emission along the path (does not require shadow rays, since its on the path)
     bool terminate = false;
 
+    PathSample bestSample; // TODO could be extended to a small list (k=2,3,4 etc.)
+    bestSample.radiance = 0.0;
+    bestSample.weight = 0.0;
+    float weightSum = 0.0;
+
     ScatterRayData rayData;
     rayData.sg = SampleGenerator(pixel, gFrameCount);
 
@@ -248,14 +253,25 @@ void rayGen()
         HitInfo hit = traceScatterRay(rayData, rayOrigin, rayDir);
         if(!hit.isValid())
         {
-            // TODO envmap sample
+            emission += thp * gScene.envMap.eval(rayDir);
             break;
         }
 
         PathSample ps = handleHit(hit, rayOrigin, rayDir, thp, emission, rayData.sg, terminate);
         ps.weight = dot(ps.radiance, 0.33);
+        weightSum += ps.weight;
 
-        emission += ps.radiance; // for now add without shadows
+        // weighted reservoir sampling for best sample
+        float rng = sampleNext1D(rayData.sg);
+        if(ps.weight > 0.0 && rng <= ps.weight / weightSum)
+        {
+            bestSample = ps;
+        }
+    }
+
+    if(bestSample.weight > 0.0)
+    {
+        emission += bestSample.radiance * weightSum / bestSample.weight; // radiance / pdf, pdf = w/wSum
     }
 
     gColorOut[pixel] = float4(emission, 1.f);

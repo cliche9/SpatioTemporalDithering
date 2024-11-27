@@ -152,6 +152,7 @@ void MinimalPathTracer::execute(RenderContext* pRenderContext, const RenderData&
     mTracer.pProgram->addDefine("USE_ENV_LIGHT", mpScene->useEnvLight() ? "1" : "0");
     mTracer.pProgram->addDefine("USE_ENV_BACKGROUND", mpScene->useEnvBackground() ? "1" : "0");
     mTracer.pProgram->addDefine("USE_RUSSIAN_ROULETTE_PATH", mUseRussianRoulettePath ? "1" : "0");
+    mTracer.pProgram->addDefine("USE_SHADOWS", mUseShadows ? "1" : "0");
 
     // For optional I/O resources, set 'is_valid_<name>' defines to inform the program of which ones it can access.
     // TODO: This should be moved to a more general mechanism using Slang.
@@ -201,6 +202,9 @@ void MinimalPathTracer::renderUI(Gui::Widgets& widget)
 
     dirty |= widget.checkbox("Use importance sampling", mUseImportanceSampling);
     widget.tooltip("Use importance sampling for materials", true);
+
+    dirty |= widget.checkbox("Use shadows", mUseShadows);
+    widget.tooltip("Enable shadow rays");
 
     dirty |= widget.checkbox("Russian roulette path", mUseRussianRoulettePath);
     widget.tooltip("Use Russian roulette for path termination", true);

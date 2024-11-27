@@ -84,4 +84,5 @@ private:
     } mTracer;
 
     bool mUseRussianRoulettePath = true;
+    bool mUseShadows = true;
 };

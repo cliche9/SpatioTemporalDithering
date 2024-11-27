@@ -96,6 +96,7 @@ static const bool kUseRussianRoulettePath = USE_RUSSIAN_ROULETTE_PATH;
 static const bool kUseRussianRouletteShadow = USE_RUSSIAN_ROULETTE_PATH;
 static const bool kUseRussianRouletteOpacity = USE_RUSSIAN_ROULETTE_PATH; // seems to have a little error? but very similar results
 static const bool kIgnoreVBuffer = true;
+static const bool kUseShadows = USE_SHADOWS;
 
 /** Payload for shadow ray.
 */
@@ -270,7 +271,8 @@ float3 evalDirectAnalytic(const ShadingData sd, const IMaterialInstance mi, inou
     const float3 origin = computeRayOrigin(sd.posW, dot(sd.faceN, ls.dir) >= 0.f ? sd.faceN : -sd.faceN);
 
     // Test visibility by tracing a shadow ray.
-    float V = traceShadowRay(origin, ls.dir, ls.distance, sg);
+    float V = 1.0;
+    if(kUseShadows) V = traceShadowRay(origin, ls.dir, ls.distance, sg);
     if (V < 0.01) return float3(0.0);
 
     // flip light direction for evaluation when opacity object is hit from the other side
