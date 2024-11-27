@@ -34,12 +34,19 @@ struct PathSample
     float weight; // scalar: thp * opacity * radiance
     float3 lightDir;
     float distance;
+    float3 posW; // world space position
 }
 
 struct ScatterRayData
 {
     PackedHitInfo packedHitInfo; // 16 byte
     SampleGenerator sg; // 16 byte
+};
+
+struct ShadowRayData
+{
+    SampleGenerator sg; // 16 byte
+    float visible; // 4 byte
 };
 
 ShadingData loadShadingData(const HitInfo hit, const float3 rayOrigin, const float3 rayDir, const ITextureSampler lod)
@@ -72,7 +79,7 @@ HitInfo traceScatterRay(inout ScatterRayData rayData, float3 origin, float3 dire
     return HitInfo(rayData.packedHitInfo);
 }
 
-float3 evalDirectAnalytic(const ShadingData sd, const IMaterialInstance mi, inout SampleGenerator sg, out float3 lightDir, out float lightDistance)
+float3 evalDirectAnalytic(const ShadingData sd, const IMaterialInstance mi, inout SampleGenerator sg, out float3 lightDir, out float lightDistance, out float3 posW)
 {
     const uint lightCount = gScene.getLightCount();
     if (lightCount == 0) return float3(0.f);
@@ -94,7 +101,7 @@ float3 evalDirectAnalytic(const ShadingData sd, const IMaterialInstance mi, inou
         return float3(0.f);
 
     // Get origin with offset applied in direction of the geometry normal to avoid self-intersection.
-    const float3 origin = computeRayOrigin(sd.posW, dot(sd.faceN, ls.dir) >= 0.f ? sd.faceN : -sd.faceN);
+    posW = computeRayOrigin(sd.posW, dot(sd.faceN, ls.dir) >= 0.f ? sd.faceN : -sd.faceN);
 
     float V = 1.0; // visibility factor
 
@@ -112,9 +119,21 @@ float3 evalDirectAnalytic(const ShadingData sd, const IMaterialInstance mi, inou
     return V * mi.eval(sd, ls.dir, sg) * ls.Li * invPdf;
 }
 
-bool generateScatterRay(const ShadingData sd, const IMaterialInstance mi, inout SampleGenerator sg, inout float3 rayOrigin, inout float3 rayDirection, inout float3 thp)
+float traceShadowRay(float3 origin, float3 dir, float distance, inout SampleGenerator sg)
 {
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = dir;
+    ray.TMin = 0.f;
+    ray.TMax = distance;
+
+    ShadowRayData rayData;
+    rayData.sg = sg;
+    rayData.visible = 1.0;    // accumulated visibility
+    TraceRay(gScene.rtAccel, RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, 0xff /* instanceInclusionMask */, 1 /* hitIdx */, rayTypeCount, 1 /* missIdx */, ray, rayData);
     
+    sg = rayData.sg;
+    return rayData.visible;
 }
 
 PathSample handleHit(const HitInfo hit, inout float3 rayOrigin, inout float3 rayDirection, inout float3 thp, inout float3 emission, inout SampleGenerator sg, inout bool terminate)
@@ -140,7 +159,7 @@ PathSample handleHit(const HitInfo hit, inout float3 rayOrigin, inout float3 ray
 
     if (kUseAnalyticLights)
     {
-        float3 Lr = evalDirectAnalytic(sd, mi, sg, output.lightDir, output.distance);
+        float3 Lr = evalDirectAnalytic(sd, mi, sg, output.lightDir, output.distance, output.posW);
         output.radiance += sd.opacity * thp * Lr;
     }
 
@@ -227,6 +246,37 @@ void closestHit(inout ScatterRayData rayData, BuiltInTriangleIntersectionAttribu
     rayData.packedHitInfo = HitInfo(triangleHit).getData();
 }
 
+[shader("anyhit")]
+void shadowAnyHit(inout ShadowRayData rayData, BuiltInTriangleIntersectionAttributes attribs)
+{
+    // Alpha test for non-opaque geometry.
+    GeometryInstanceID instanceID = getGeometryInstanceID();
+    VertexData v = getVertexData(instanceID, PrimitiveIndex(), attribs);
+    const uint materialID = gScene.getMaterialID(instanceID);
+    ExplicitLodTextureSampler lod = { 0.0 };
+
+    let material = gScene.materials.getMaterial(materialID);
+    float alpha = material.evalOpacity(gScene.materials, v, lod);
+
+    if(kUseRussianRouletteShadow)
+    {
+        float rng = sampleNext1D(rayData.sg);
+        if (rng > alpha) IgnoreHit();
+        else
+        {
+            rayData.visible = 0.0;
+            AcceptHitAndEndSearch();
+        }
+    }
+
+    rayData.visible *= (1.0 - alpha);
+    if (rayData.visible > 0.01f) IgnoreHit();
+    else AcceptHitAndEndSearch();
+}
+
+[shader("miss")]
+void shadowMiss(inout ShadowRayData rayData) {}
+
 [shader("raygeneration")]
 void rayGen()
 {
@@ -271,7 +321,9 @@ void rayGen()
 
     if(bestSample.weight > 0.0)
     {
-        emission += bestSample.radiance * weightSum / bestSample.weight; // radiance / pdf, pdf = w/wSum
+        // visibility ray
+        float V = traceShadowRay(bestSample.posW, bestSample.lightDir, bestSample.distance, rayData.sg);
+        emission += V * bestSample.radiance * weightSum / bestSample.weight; // radiance / pdf, pdf = w/wSum
     }
 
     gColorOut[pixel] = float4(emission, 1.f);

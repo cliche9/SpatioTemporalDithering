@@ -165,11 +165,13 @@ void VSampling::setScene(RenderContext* pRenderContext, const ref<Scene>& pScene
         desc.addTypeConformances(mpScene->getTypeConformances());
         desc.setMaxTraceRecursionDepth(kMaxRecursionDepth);
 
-        mTracer.pBindingTable = RtBindingTable::create(1, 1, mpScene->getGeometryCount());
+        mTracer.pBindingTable = RtBindingTable::create(2, 2, mpScene->getGeometryCount());
         auto& sbt = mTracer.pBindingTable;
         sbt->setRayGen(desc.addRayGen("rayGen"));
         sbt->setMiss(0, desc.addMiss("miss"));
+        sbt->setMiss(1, desc.addMiss("shadowMiss"));
         sbt->setHitGroup(0, mpScene->getGeometryIDs(Scene::GeometryType::TriangleMesh), desc.addHitGroup("closestHit", "anyHit"));
+        sbt->setHitGroup(1, mpScene->getGeometryIDs(Scene::GeometryType::TriangleMesh), desc.addHitGroup("", "shadowAnyHit"));
 
         DefineList defines;
         defines.add(mpScene->getSceneDefines());
