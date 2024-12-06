@@ -116,6 +116,7 @@ void TAA::execute(RenderContext* pRenderContext, const RenderData& renderData)
     var["PerFrameCB"]["gUseMaxMotionVector"] = mControls.useMaxMotionVector;
     var["PerFrameCB"]["gColorRectifyMode"] = mControls.colorRectifyMode;
     var["PerFrameCB"]["gBicubicColorFetch"] = mControls.bicubicColorFetch;
+    var["PerFrameCB"]["gUseClipping"] = mControls.useClipping;
     var["gTexColor"] = pColorIn;
     var["gTexMotionVec"] = pMotionVec;
     var["gTexPrevColor"] = mpPrevColor;
@@ -146,5 +147,7 @@ void TAA::renderUI(Gui::Widgets& widget)
     widget.checkbox("Anti Flicker", mControls.antiFlicker);
 
     widget.checkbox("Max Motion Vector", mControls.useMaxMotionVector);
+    widget.checkbox("Clipping", mControls.useClipping);
+    widget.tooltip("Use clipping for rectification. Otherwise uses clamping (faster)");
     widget.checkbox("Bicubic Color Fetch", mControls.bicubicColorFetch);
 }

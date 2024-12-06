@@ -70,6 +70,7 @@ private:
         bool useMaxMotionVector = true;
         int colorRectifyMode = 0; // box, variance, clip or clamp
         bool bicubicColorFetch = true; // otherwise bilinear
+        bool useClipping = false; // otherwise use clamping
 
     } mControls;
 

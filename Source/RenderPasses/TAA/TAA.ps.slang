@@ -37,7 +37,7 @@ cbuffer PerFrameCB
     bool gUseMaxMotionVector;
     int gColorRectifyMode; // box, variance, clip or clamp
     bool gBicubicColorFetch; // otherwise bilinear
-
+    bool gUseClipping; // otherwise clamping
 };
 
 Texture2D gTexColor;
@@ -80,6 +80,26 @@ float3 bicubicSampleCatmullRom(Texture2D tex, SamplerState samp, float2 samplePo
     return result;
 }
 
+float2 clip(float2 center, float2 radius, float2 value)
+{
+    radius = max(radius, 1e-6); // Avoid division by zero
+
+    // Transform to the space where the ellipse is a unit sphere
+    let relValue = (value - center) / radius;
+
+    // Calculate the squared distance of the normalized value from the origin
+    float distanceSquared = dot(relValue, relValue);
+
+    // If the point is inside the ellipse, return the original value
+    if (distanceSquared <= 1.0) {
+        return value;
+    }
+
+    // Compute the scaling factor to project the point onto the ellipse
+    // Scaling factor is r / distance, with r = 1 (unit sphere)
+    float scale = rsqrt(distanceSquared);
+    return lerp(center, value, scale);
+}
 
 float4 main(float2 texC : TEXCOORD) : SV_TARGET0
 {
@@ -155,7 +175,12 @@ float4 main(float2 texC : TEXCOORD) : SV_TARGET0
         alpha = clamp((gAlpha * distToClamp) / (distToClamp + colorMax.x - colorMin.x), 0.f, 1.f);
     }
 
-    history = clamp(history, colorMin, colorMax);
+    if(gUseClipping)
+    {
+        history.x = clamp(history.x, colorMin.x, colorMax.x); // clamp luma
+        history.yz = clip(colorAvg.yz, gColorBoxSigma * sigma.yz, history.yz); // clip chroma
+    }
+    else history = clamp(history, colorMin, colorMax);
     float3 result = YCgCoToRGB(lerp(history, color, alpha));
     return float4(result, 1.f);
 }
