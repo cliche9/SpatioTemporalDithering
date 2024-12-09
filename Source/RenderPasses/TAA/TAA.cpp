@@ -37,6 +37,8 @@ namespace
     const std::string kColorBoxSigma = "colorBoxSigma";
     const std::string kAntiFlicker = "antiFlicker";
 
+    const std::string kHistory = "debugHistory";
+
     const std::string kShaderFilename = "RenderPasses/TAA/TAA.ps.slang";
 }
 
@@ -86,7 +88,9 @@ RenderPassReflection TAA::reflect(const CompileData& compileData)
     RenderPassReflection reflection;
     reflection.addInput(kMotionVec, "Screen-space motion vectors");
     reflection.addInput(kColorIn, "Color-buffer of the current frame");
+    
     reflection.addOutput(kColorOut, "Anti-aliased color buffer");
+    reflection.addOutput(kHistory, "history counts").format(ResourceFormat::R8Unorm);
     return reflection;
 }
 
@@ -95,14 +99,16 @@ void TAA::execute(RenderContext* pRenderContext, const RenderData& renderData)
     const auto& pColorIn = renderData.getTexture(kColorIn);
     const auto& pColorOut = renderData.getTexture(kColorOut);
     const auto& pMotionVec = renderData.getTexture(kMotionVec);
+    const auto& pDebugHistory = renderData.getTexture(kHistory);
     if(!mEnabled)
     {
         pRenderContext->blit(pColorIn->getSRV(), pColorOut->getRTV());
         return;
     }
 
-    allocatePrevColor(pColorOut.get());
+    allocatePrevColorAndHistory(pColorOut.get());
     mpFbo->attachColorTarget(pColorOut, 0);
+    mpFbo->attachColorTarget(mpCurHistory, 1); // render current history
 
     // Make sure the dimensions match
     FALCOR_ASSERT((pColorIn->getWidth() == mpPrevColor->getWidth()) && (pColorIn->getWidth() == pMotionVec->getWidth()));
@@ -117,16 +123,23 @@ void TAA::execute(RenderContext* pRenderContext, const RenderData& renderData)
     var["PerFrameCB"]["gUseColorVariance"] = mControls.useColorVariance;
     var["PerFrameCB"]["gBicubicColorFetch"] = mControls.bicubicColorFetch;
     var["PerFrameCB"]["gUseClipping"] = mControls.useClipping;
+    var["PerFrameCB"]["gUseHistory"] = mControls.useHistory;
+    var["PerFrameCB"]["gMaxHistory"] = mControls.maxHistory;
     var["gTexColor"] = pColorIn;
     var["gTexMotionVec"] = pMotionVec;
     var["gTexPrevColor"] = mpPrevColor;
+    var["gTexPrevHistory"] = mpPrevHistory; // bind previous history
     var["gSampler"] = mpLinearSampler;
 
     mpPass->execute(pRenderContext, mpFbo);
     pRenderContext->blit(pColorOut->getSRV(), mpPrevColor->getRTV());
+
+    pRenderContext->blit(mpCurHistory->getSRV(), pDebugHistory->getRTV());
+
+    std::swap(mpPrevHistory, mpCurHistory);
 }
 
-void TAA::allocatePrevColor(const Texture* pColorOut)
+void TAA::allocatePrevColorAndHistory(const Texture* pColorOut)
 {
     bool allocate = mpPrevColor == nullptr;
     allocate = allocate || (mpPrevColor->getWidth() != pColorOut->getWidth());
@@ -135,7 +148,10 @@ void TAA::allocatePrevColor(const Texture* pColorOut)
     allocate = allocate || (mpPrevColor->getFormat() != pColorOut->getFormat());
     FALCOR_ASSERT(pColorOut->getSampleCount() == 1);
 
-    if (allocate) mpPrevColor = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), pColorOut->getFormat(), 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
+    if (!allocate) return;
+    mpPrevColor = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), pColorOut->getFormat(), 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
+    mpPrevHistory = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), ResourceFormat::R8Unorm, 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
+    mpCurHistory = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), ResourceFormat::R8Unorm, 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
 }
 
 void TAA::renderUI(Gui::Widgets& widget)
@@ -154,9 +170,8 @@ void TAA::renderUI(Gui::Widgets& widget)
 
     widget.checkbox("Enabled", mEnabled);
     if(!mEnabled) return;
-    widget.var("Alpha", mControls.alpha, 0.f, 1.0f, 0.001f);
-    
-    widget.checkbox("Anti Flicker", mControls.antiFlicker);
+
+
     widget.checkbox("Max Motion Vector (3x3)", mControls.useMaxMotionVector);
 
     boolDropdown("Color-Box", mControls.useColorVariance, "BoundingBox", "Variance");
@@ -168,4 +183,15 @@ void TAA::renderUI(Gui::Widgets& widget)
     boolDropdown("ClipMode", mControls.useClipping, "Clamp", "Clip");
 
     boolDropdown("Color Fetch", mControls.bicubicColorFetch, "Bilinear", "Bicubic");
+
+    boolDropdown("History", mControls.useHistory, "Exponential Average", "History Buffer");
+    if(mControls.useHistory)
+    {
+        widget.var("Max History", mControls.maxHistory, 1, 255, 1);
+    }
+    else
+    {
+        widget.var("Alpha", mControls.alpha, 0.f, 1.0f, 0.001f);
+        widget.checkbox("Anti Flicker", mControls.antiFlicker);
+    }
 }

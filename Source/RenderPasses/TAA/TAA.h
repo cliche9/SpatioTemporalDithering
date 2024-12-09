@@ -56,7 +56,7 @@ public:
     bool getAntiFlicker() { return mControls.antiFlicker; }
 
 private:
-    void allocatePrevColor(const Texture* pColorOut);
+    void allocatePrevColorAndHistory(const Texture* pColorOut);
 
     ref<FullScreenPass> mpPass;
     ref<Fbo> mpFbo;
@@ -71,9 +71,13 @@ private:
         bool useColorVariance = true; // otherwise color bounding box
         bool bicubicColorFetch = true; // otherwise bilinear
         bool useClipping = false; // otherwise use clamping
-
+        bool useHistory = false; // otherwise exponential moving average
+        int maxHistory = 20; // max accumulated frames (theory)
     } mControls;
 
     ref<Texture> mpPrevColor;
+
+    ref<Texture> mpPrevHistory;
+    ref<Texture> mpCurHistory;
     bool mEnabled = true;
 };

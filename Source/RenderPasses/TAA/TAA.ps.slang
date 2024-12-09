@@ -38,13 +38,25 @@ cbuffer PerFrameCB
     bool gUseColorVariance; // otherwise bounding box
     bool gBicubicColorFetch; // otherwise bilinear
     bool gUseClipping; // otherwise clamping
+    bool gUseHistory; // otherwise exponential decay
+    int gMaxHistory; // max count for history
 };
 
 Texture2D gTexColor;
 Texture2D gTexMotionVec;
 Texture2D gTexPrevColor;
+Texture2D gTexPrevHistory;
 SamplerState gSampler;
 
+float encodeHistory(int history)
+{
+    return history / 255.0;
+}
+
+int decodeHistory(float history)
+{
+    return int(history * 255.0 + 0.5);
+}
 
 // Catmull-Rom filtering code from http://vec3.ca/bicubic-filtering-in-fewer-taps/
 float3 bicubicSampleCatmullRom(Texture2D tex, SamplerState samp, float2 samplePos, float2 texDim)
@@ -183,7 +195,13 @@ float2 clipBox(float2 minv, float2 maxv, float2 lineStart, float2 lineEnd)
     return lerp(lineStart, lineEnd, tmin);
 }
 
-float4 main(float2 texC : TEXCOORD) : SV_TARGET0
+struct PSOut
+{
+    float4 color : SV_TARGET0;
+    float history : SV_TARGET1; // UNORM encoded history
+};
+
+PSOut main(float2 texC : TEXCOORD) : SV_TARGET0
 {
     const int2 offset[8] =
     {
@@ -254,6 +272,8 @@ float4 main(float2 texC : TEXCOORD) : SV_TARGET0
         history = gTexPrevColor.SampleLevel(gSampler, texC + motion, 0).rgb;
 
     history = RGBToYCgCo(history);
+    // history N
+    int N = decodeHistory(gTexPrevHistory.SampleLevel(gSampler, texC + motion, 0).r);
 
     float alpha = gAlpha;
 
@@ -266,6 +286,7 @@ float4 main(float2 texC : TEXCOORD) : SV_TARGET0
         alpha = clamp((gAlpha * distToClamp) / (distToClamp + colorMax.x - colorMin.x), 0.f, 1.f);
     }
 
+    float3 originalHistory = history;
     if(gUseClipping)
     {
         history.x = clamp(history.x, colorMin.x, colorMax.x); // clamp luma
@@ -276,6 +297,22 @@ float4 main(float2 texC : TEXCOORD) : SV_TARGET0
             history.yz = clipBox(colorMin.yz, colorMax.yz, history.yz, color.yz); // clip chroma
     }
     else history = clamp(history, colorMin, colorMax);
-    float3 result = YCgCoToRGB(lerp(history, color, alpha));
-    return float4(result, 1.f);
+    
+    if(any(originalHistory != history)) N = 0; // reset history
+
+    PSOut output;
+    if(gUseHistory)
+    {
+        float3 result = YCgCoToRGB(lerp(history, color, 1.0 / (N+1)));
+        output.color = float4(result, 1.f);
+    }
+    else
+    {
+        
+        float3 result = YCgCoToRGB(lerp(history, color, alpha));
+        output.color = float4(result, 1.f);
+    }
+    
+    output.history = encodeHistory(min(gMaxHistory, N+1));
+    return output;
 }
