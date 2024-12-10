@@ -189,6 +189,7 @@ struct GBufferRT
             {
                 float2 ddx, ddy;
                 computeAnisotropicAxesRayCones(triangleHit, v, rayDir, hitT, screenSpacePixelSpreadAngle, ddx, ddy);
+                ddx *= exp2(TEXTURE_LOD_BIAS); ddy *= exp2(TEXTURE_LOD_BIAS);
                 lod = ExplicitGradientTextureSampler(ddx, ddy);
                 texGrads = float4(ddx, ddy);
             }
@@ -196,6 +197,7 @@ struct GBufferRT
             {
                 float2 ddx, ddy;
                 computeRayDifferentials(triangleHit, rayDir, hitT, gScene.camera, invFrameDim, ddx, ddy);
+                ddx *= exp2(TEXTURE_LOD_BIAS); ddy *= exp2(TEXTURE_LOD_BIAS);
                 lod = ExplicitGradientTextureSampler(ddx, ddy);
                 texGrads = float4(ddx, ddy);
             }

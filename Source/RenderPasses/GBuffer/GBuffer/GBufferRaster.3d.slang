@@ -83,7 +83,7 @@ GBufferPSOut psMain(VSOut vsOut, uint triangleIndex : SV_PrimitiveID, float3 bar
 
     float3 faceNormal = gScene.getFaceNormalW(vsOut.instanceID, triangleIndex);
     VertexData v = prepareVertexData(vsOut, faceNormal);
-    let lod = ImplicitLodTextureSampler();
+    let lod = ImplicitLodTextureSampler(TEXTURE_LOD_BIAS);
 
 #if USE_ALPHA_TEST
     if (gScene.materials.alphaTest(v, vsOut.materialID, lod)) discard;

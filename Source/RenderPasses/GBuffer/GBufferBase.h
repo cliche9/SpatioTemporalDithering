@@ -83,6 +83,7 @@ protected:
     bool                            mAdjustShadingNormals = true;                   ///< Adjust shading normals.
     bool                            mForceCullMode = false;                         ///< Force cull mode for all geometry, otherwise set it based on the scene.
     RasterizerState::CullMode       mCullMode = RasterizerState::CullMode::Back;    ///< Cull mode to use for when mForceCullMode is true.
+    float                           mTextureLodBias = 0.0f;                         ///< Bias applied after texture lod calculation.
 
     bool                            mOptionsChanged = false;                        ///< Indicates whether any options that affect the output have changed since last frame.
 };

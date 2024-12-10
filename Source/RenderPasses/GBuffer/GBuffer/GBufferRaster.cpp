@@ -187,6 +187,7 @@ void GBufferRaster::execute(RenderContext* pRenderContext, const RenderData& ren
     {
         // Set program defines.
         mDepthPass.pState->getProgram()->addDefine("USE_ALPHA_TEST", mUseAlphaTest ? "1" : "0");
+        mDepthPass.pState->getProgram()->addDefine("TEXTURE_LOD_BIAS", std::to_string(mTextureLodBias));
 
         // Create program vars.
         if (!mDepthPass.pVars)
@@ -203,6 +204,7 @@ void GBufferRaster::execute(RenderContext* pRenderContext, const RenderData& ren
         // Set program defines.
         mGBufferPass.pProgram->addDefine("ADJUST_SHADING_NORMALS", mAdjustShadingNormals ? "1" : "0");
         mGBufferPass.pProgram->addDefine("USE_ALPHA_TEST", mUseAlphaTest ? "1" : "0");
+        mGBufferPass.pProgram->addDefine("TEXTURE_LOD_BIAS", std::to_string(mTextureLodBias));
 
         // For optional I/O resources, set 'is_valid_<name>' defines to inform the program of which ones it can access.
         // TODO: This should be moved to a more general mechanism using Slang.

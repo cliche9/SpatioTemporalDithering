@@ -55,6 +55,7 @@ namespace
     const char kAdjustShadingNormals[] = "adjustShadingNormals";
     const char kForceCullMode[] = "forceCullMode";
     const char kCullMode[] = "cull";
+    const char kTextureLodBias[] = "textureLodBias";
 }
 
 void GBufferBase::parseProperties(const Properties& props)
@@ -69,6 +70,7 @@ void GBufferBase::parseProperties(const Properties& props)
         else if (key == kAdjustShadingNormals) mAdjustShadingNormals = value;
         else if (key == kForceCullMode) mForceCullMode = value;
         else if (key == kCullMode) mCullMode = value;
+        else if (key == kTextureLodBias) mTextureLodBias = value;
         // TODO: Check for unparsed fields, including those parsed in derived classes.
     }
 
@@ -87,6 +89,7 @@ Properties GBufferBase::getProperties() const
     props[kAdjustShadingNormals] = mAdjustShadingNormals;
     props[kForceCullMode] = mForceCullMode;
     props[kCullMode] = mCullMode;
+    props[kTextureLodBias] = mTextureLodBias;
     return props;
 }
 
@@ -136,6 +139,9 @@ void GBufferBase::renderUI(Gui::Widgets& widget)
             mOptionsChanged = true;
         }
     }
+
+    mOptionsChanged |= widget.var("(GBuffer) Texture LOD bias", mTextureLodBias, -16.f, 16.f, 0.1f);
+    widget.tooltip("Bias applied after texture LOD calculation. Only implemented for G-Buffer, not V-Buffer", true);
 }
 
 void GBufferBase::execute(RenderContext* pRenderContext, const RenderData& renderData)
@@ -152,6 +158,7 @@ void GBufferBase::execute(RenderContext* pRenderContext, const RenderData& rende
     // Pass flag for adjust shading normals to subsequent passes via the dictionary.
     // Adjusted shading normals cannot be passed via the VBuffer, so this flag allows consuming passes to compute them when enabled.
     dict[Falcor::kRenderPassGBufferAdjustShadingNormals] = mAdjustShadingNormals;
+    dict[Falcor::kRenderPassGBufferTextureLodBias] = mTextureLodBias;
 
     uint gbufferSampleCount = 1u;
     if (mSamplePattern != SamplePattern::Center)

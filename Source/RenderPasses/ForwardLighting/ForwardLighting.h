@@ -65,7 +65,6 @@ private:
     float mAmbientIntensity = 0.25f;
     float mLightIntensity = 0.5f;
     bool mEnvMapMirror = false;
-    float mLodBias = 0.0f;
 
     bool mDirty = true;
 };
