@@ -36,6 +36,7 @@ struct PathPoint
 {
     float3 pos;
     float3 dir;
+    float3 up;
     float time;
 };
 
@@ -50,7 +51,7 @@ class VideoRecorder : public RenderPass
         Warmup // warmup prior to render that should fix temporal artifacts
     };
 public:
-    FALCOR_PLUGIN_CLASS(VideoRecorder, "VideoRecorder", "Insert pass description here.");
+    FALCOR_PLUGIN_CLASS(VideoRecorder, "VideoRecorder", "Camera Path and Video recorder(using FFMPEG)");
 
     static ref<VideoRecorder> create(ref<Device> pDevice, const Properties& props) { return make_ref<VideoRecorder>(pDevice, props); }
 
@@ -66,6 +67,13 @@ public:
     void renderUI(RenderContext* pRenderContext, Gui::Widgets& widget) override;
 
 private:
+    struct PathPointPre1_0
+    {
+        float3 pos;
+        float3 dir;
+        float time;
+    };
+
     ref<Scene> mpScene;
     std::string mSceneDir = "."; // WD
 
@@ -85,6 +93,8 @@ private:
     void stopWarmup();
     void smoothPath();
 
+    double getStartTime();
+
     void savePath(const std::string& filename) const;
     void loadPath(const std::string& filename);
 
@@ -95,7 +105,7 @@ private:
 
     std::vector<PathPoint> mPathPoints; // original recording
     std::vector<PathPoint> mSmoothPoints; // smoothed version
-    Clock mClock;
+    Clock* mpGlobalClock = nullptr;
 
     State mState = State::Idle;
     size_t mRenderIndex = 0;
@@ -103,7 +113,6 @@ private:
     std::string mActiveOutput = "";
     std::set<std::string> mOutputs;
     int mFps = 60;
-    bool mCleanupFiles = true;
 
     std::string mSaveName = "path";
     std::vector<Gui::DropdownValue> mFileList;
@@ -111,7 +120,12 @@ private:
     float mTimeScale = 1.0;
     bool mLoop = false;
     std::string mOutputFilter;
+    std::string mOutputPrefixFolder = "videos";
     std::string mOutputPrefix;
+    bool mDeleteDublicatesAtStartAndEnd = true;
+
+    PathPoint mLastFramePathPoint;
+    bool mLastFramePathPointValid = false;
 
     int guardBand = 0;
     ref<Texture> mpBlitTexture;

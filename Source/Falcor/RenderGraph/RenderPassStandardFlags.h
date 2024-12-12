@@ -81,5 +81,7 @@ static const char kRenderPassGBufferAdjustShadingNormals[] = "_gbufferAdjustShad
 
 static const char kRenderPassGBufferTextureLodBias[] = "_gbufferTextureLodBias";
 
+static const char kRenderGlobalClock[] = "_globalClock";
+
 FALCOR_ENUM_CLASS_OPERATORS(RenderPassRefreshFlags);
 } // namespace Falcor

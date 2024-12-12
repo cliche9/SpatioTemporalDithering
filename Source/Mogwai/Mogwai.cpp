@@ -657,6 +657,7 @@ namespace Mogwai
         dict[kRenderPassTime] = getGlobalClock().getTime();
         dict[kRenderGraph] = pGraph.get();
         dict[kRenderer] = (SampleApp*)this;
+        dict[kRenderGlobalClock] = &getGlobalClock();
         
         pGraph->execute(pRenderContext);
     }
