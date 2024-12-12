@@ -212,9 +212,10 @@ void VideoRecorder::renderUI(RenderContext* pRenderContext, Gui::Widgets& widget
     widget.tooltip("Leave empty if no folder is desired");
     widget.textbox("Filename Prefix", mOutputPrefix);
 
+    float timeScale = (float)mpGlobalClock->getTimeScale();
+    if(widget.var("Time Scale", timeScale, 0.00001f, 1e10f, 0.1f))
+        mpGlobalClock->setTimeScale(timeScale);
     widget.var("FPS", mFps, 1, 240);
-
-    widget.var("Time Scale", mTimeScale, 0.01f, 100.0f, 0.1f);
 
     if (widget.button("Smooth Path") && mPathPoints.size() > 1 && mState != State::Record)
     {
@@ -306,14 +307,14 @@ PathPoint VideoRecorder::createFromCamera()
     p.pos = cam->getPosition();
     p.dir = normalize(cam->getTarget() - p.pos);
     p.up = cam->getUpVector();
-    p.time = (float)mpGlobalClock->getTime();
+    p.time = getTime();
 
     return p;
 }
 
 float VideoRecorder::getTime() const
 {
-    return static_cast<float>(mpGlobalClock->getTime()) * mTimeScale;
+    return static_cast<float>(mpGlobalClock->getTime());
 }
 
 namespace fs = std::filesystem;
@@ -415,7 +416,9 @@ void VideoRecorder::updateCamera()
 
     float time = getTime();
     auto cam = mpScene->getCamera();
-
+    // next time if rendering or previewing
+    double nextTime = getStartTime() + (mRenderIndex / (double)mFps) * mpGlobalClock->getTimeScale();
+    
     // helper function to get the interpolated path point based on time
     auto getInterpolatedPathPoint = [&](float time)
         {
@@ -502,17 +505,22 @@ void VideoRecorder::updateCamera()
             cam->setUpVector(p.up);
         }
 
+        mpGlobalClock->pause(); // make sure it is paused because this pass sets the time manually
         if (p.time >= mPathPoints.back().time)
         {
             // stop animation
             stopRender();
         }
+        else mpGlobalClock->setTime(nextTime);
     }  break;
 
     case State::Warmup:
     {
         size_t warmupFrames = 120;
         float t = 1.0f - (float)mRenderIndex / (float)warmupFrames;
+        double warmupGlobalTime = getStartTime() - (double(warmupFrames - mRenderIndex) / (double)mFps) * mpGlobalClock->getTimeScale();
+        mpGlobalClock->setTime(warmupGlobalTime);
+        mpGlobalClock->pause(); // make sure it is paused because this pass sets the time manually
         auto p = getInterpolatedPathPoint(t); // fix some issues with temporal passes 
         if (updateCamera(p))
         {
@@ -547,10 +555,10 @@ void VideoRecorder::startPreview()
     if (mState != State::Idle) return;
 
     mState = State::Preview;
-    mpGlobalClock->play();
     mpGlobalClock->setTime(getStartTime());
+    mpGlobalClock->setFramerate(0);
     mpScene->getCamera()->setIsAnimated(false); //Disable camera animations
-
+    mpGlobalClock->play();
 }
 
 void VideoRecorder::startRender()
@@ -559,8 +567,9 @@ void VideoRecorder::startRender()
     if (mState == State::Record) return;
 
     mState = State::Render;
-    mpGlobalClock->play();
-    mpGlobalClock->setFramerate(mFps);
+    mpGlobalClock->setTime(getStartTime());
+    mpGlobalClock->pause();
+    mpGlobalClock->setFramerate(0);
 
     mRenderIndex = 0;
 }
@@ -667,6 +676,8 @@ void VideoRecorder::stopRender()
             logError("Error while executing ffmpeg:\n");
         }
     }
+
+    mpGlobalClock->play(); // resume clock
 }
 
 void VideoRecorder::stopWarmup()
@@ -685,7 +696,7 @@ void VideoRecorder::smoothPath()
     // apply gaussian blur to path
     mSmoothPoints.resize(mPathPoints.size());
 
-    const float timeRadius = 0.5f * mTimeScale; // 0.5 seconds
+    const float timeRadius = 0.5f; // 0.5 seconds
 
     for (size_t i = 0; i < mPathPoints.size(); ++i)
     {
