@@ -26,7 +26,7 @@ void main(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint3 localI
     float diffX = abs(dRight - dLeft) / depth;
     float diffY = abs(dUp - dDown) / depth;
 
-    float threshold = 0.00;
+    float threshold = 0.001;
     uint edge = (diffX > threshold || diffY > threshold) ? 255 : 0;
-    gEdgeTex[id.xy] = 255;
+    gEdgeTex[id.xy] = edge;
 }

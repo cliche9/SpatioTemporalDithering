@@ -77,8 +77,8 @@ RenderPassReflection RayMSAA::reflect(const CompileData& compileData)
     reflector.addOutput(kColorOut, "anti-aliased color").format(ResourceFormat::RGBA16Float).bindFlags(ResourceBindFlags::AllColorViews);
 
     // internal
-    reflector.addOutput(kEdgeMask, "detected edges").format(ResourceFormat::R8Uint);
-    reflector.addOutput(kDepthSamples, "traced depth samples").texture2D(0,0,1,1,mSamples).format(ResourceFormat::R32Float); // TODO smaller format (R8 as linear interpolation between min and max)
+    reflector.addOutput(kEdgeMask, "detected edges").format(ResourceFormat::R8Uint).bindFlags(ResourceBindFlags::AllColorViews).texture2D(0,0);
+    reflector.addOutput(kDepthSamples, "traced depth samples").texture2D(0,0,1,1,mSamples).format(ResourceFormat::R32Float).bindFlags(ResourceBindFlags::ShaderResource | ResourceBindFlags::UnorderedAccess);; // TODO smaller format (R8 as linear interpolation between min and max)
     return reflector;
 }
 
@@ -125,13 +125,13 @@ void RayMSAA::execute(RenderContext* pRenderContext, const RenderData& renderDat
 
     {
         FALCOR_PROFILE(pRenderContext, "Edges");
-        auto var = mpColorPass->getRootVar();
+        auto var = mpEdgeMaskPass->getRootVar();
         var["gDepthTex"] = pDepth;
         var["gEdgeTex"] = pEdgeMask;
         var["CB"]["gStep"] = uvstep;
         var["CB"]["gResolution"] = resolution;
 
-        mpColorPass->execute(pRenderContext, width, height, 1);
+        mpEdgeMaskPass->execute(pRenderContext, width, height, 1);
     }
 
     {
