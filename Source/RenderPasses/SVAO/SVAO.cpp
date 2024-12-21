@@ -223,7 +223,7 @@ void SVAO::execute(RenderContext* pRenderContext, const RenderData& renderData)
     auto pInternalRayMin = renderData[kInternalRayMin]->asTexture();
     auto pInternalRayMax = renderData[kInternalRayMax]->asTexture();
 
-    auto pDebugDualDepth = renderData[kDebugDualDepth]->asTexture();
+    //auto pDebugDualDepth = renderData[kDebugDualDepth]->asTexture();
 
     if (!mEnabled)
     {

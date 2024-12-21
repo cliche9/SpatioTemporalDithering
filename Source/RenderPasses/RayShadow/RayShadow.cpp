@@ -79,7 +79,7 @@ RenderPassReflection RayShadow::reflect(const CompileData& compileData)
 
     reflector.addOutput(kVisibility, "Visibility map. Values are [0,1] where 0 means the pixel is completely shadowed and 1 means it's not shadowed at all")
         .format(ResourceFormat::R8Unorm)
-        .texture2D(mInputSize.x, mInputSize.y, 1, 1, mLightCount)
+        .texture2D(mInputSize.x, mInputSize.y, 1, 1, std::max(1, mLightCount))
         .bindFlags(ResourceBindFlags::RenderTarget);
     return reflector;
 }
