@@ -9,6 +9,13 @@ RWTexture2DArray<float> gDepthSamples;
 
 SamplerState gSampler;
 
+#ifndef LARGE_DISPATCH
+#define LARGE_DISPATCH 1
+#endif
+#ifndef MSAA_SAMPLES
+#define MSAA_SAMPLES 8
+#endif
+
 struct RayData
 {
     float depth;
@@ -95,28 +102,37 @@ void rayGen()
         maxDepth = max(maxDepth, d);
     }
 
-    float2 pixel = float2(id.xy) + 0.5 + sample_pos[id.z];
-    RayDesc ray;
-    ray.Origin = gScene.camera.data.posW;
-    ray.Direction = normalize(gScene.camera.computeNonNormalizedRayDirPinhole(id.xy, DispatchRaysDimensions().xy, sample_pos[id.z] + 0.5));    
-    ray.TMin = minDepth;
-    ray.TMax = maxDepth;
-    //ray.TMin = gScene.camera.data.nearZ;
-    //ray.TMax = gScene.camera.data.farZ;
+    #if LARGE_DISPATCH
+    {
+    #else // small dispatch size => loop
+    for(uint i = 0; i < MSAA_SAMPLES; ++i) {
+        id.z = i;
+    #endif
 
-    // convert to proper ray depth
-    ray.TMin = ViewDepthToRay(ray.Direction, ray.TMin);
-    ray.TMax = ViewDepthToRay(ray.Direction, ray.TMax);
+        float2 pixel = float2(id.xy) + 0.5 + sample_pos[id.z];
+        RayDesc ray;
+        ray.Origin = gScene.camera.data.posW;
+        ray.Direction = normalize(gScene.camera.computeNonNormalizedRayDirPinhole(id.xy, DispatchRaysDimensions().xy, sample_pos[id.z] + 0.5));    
+        ray.TMin = minDepth;
+        ray.TMax = maxDepth;
+        //ray.TMin = gScene.camera.data.nearZ;
+        //ray.TMax = gScene.camera.data.farZ;
 
-    RayData rayData;
-    rayData.depth = FLT_MAX;
+        // convert to proper ray depth
+        ray.TMin = ViewDepthToRay(ray.Direction, ray.TMin);
+        ray.TMax = ViewDepthToRay(ray.Direction, ray.TMax);
 
-    TraceRay(
-        gScene.rtAccel,
-        RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES,
-        0xff /* instanceInclusionMask */, 0 /* hitIdx */, 1 /*ray type count*/, 0 /* missIdx */,
-        ray, rayData
-    );
+        RayData rayData;
+        rayData.depth = FLT_MAX;
 
-    gDepthSamples[id] = RayToViewDepth(ray.Direction, rayData.depth);
+        TraceRay(
+            gScene.rtAccel,
+            RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES,
+            0xff /* instanceInclusionMask */, 0 /* hitIdx */, 1 /*ray type count*/, 0 /* missIdx */,
+            ray, rayData
+        );
+
+        gDepthSamples[id] = RayToViewDepth(ray.Direction, rayData.depth);
+
+    }
 }

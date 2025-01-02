@@ -61,4 +61,5 @@ private:
     ref<Sampler> mpPointSampler;
 
     int mSamples = 8; // additional samples per pixel
+    bool mLargeDispatch = true; // uses larger dispatch size to trace all rays at once, otherwise only one dispatch per pixel
 };

@@ -139,12 +139,14 @@ void RayMSAA::execute(RenderContext* pRenderContext, const RenderData& renderDat
 
     {
         FALCOR_PROFILE(pRenderContext, "RayTracing");
+        mpRayProgram->addDefine("LARGE_DISPATCH", mLargeDispatch ? "1" : "0");
+        mpRayProgram->addDefine("MSAA_SAMPLES", std::to_string(mSamples));
         auto var = mpRayVars->getRootVar();
         var["gDepthTex"] = pDepth;
         var["gEdgeTex"] = pEdgeMask;
         var["gDepthSamples"] = pDepthSamples;
 
-        mpScene->raytrace(pRenderContext, mpRayProgram.get(), mpRayVars, uint3(width, height, mSamples));
+        mpScene->raytrace(pRenderContext, mpRayProgram.get(), mpRayVars, uint3(width, height, mLargeDispatch ? mSamples : 1));
     }
 
     {
@@ -170,6 +172,9 @@ void RayMSAA::renderUI(Gui::Widgets& widget)
     if (!mEnabled) return;
 
     if (widget.var("Samples", mSamples, 1, 16))
+        requestRecompile();
+
+    if (widget.checkbox("Large Dispatch", mLargeDispatch))
         requestRecompile();
 
 }
