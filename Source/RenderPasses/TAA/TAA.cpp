@@ -125,6 +125,7 @@ void TAA::execute(RenderContext* pRenderContext, const RenderData& renderData)
     var["PerFrameCB"]["gUseClipping"] = mControls.useClipping;
     var["PerFrameCB"]["gUseHistory"] = mControls.useHistory;
     var["PerFrameCB"]["gMaxHistory"] = mControls.maxHistory;
+    var["PerFrameCB"]["gRectifyColor"] = mControls.rectifyColor;
     var["gTexColor"] = pColorIn;
     var["gTexMotionVec"] = pMotionVec;
     var["gTexPrevColor"] = mpPrevColor;
@@ -174,13 +175,18 @@ void TAA::renderUI(Gui::Widgets& widget)
 
     widget.checkbox("Max Motion Vector (3x3)", mControls.useMaxMotionVector);
 
-    boolDropdown("Color-Box", mControls.useColorVariance, "BoundingBox", "Variance");
-    if(mControls.useColorVariance)
-    {
-        widget.var("Color-Box Sigma", mControls.colorBoxSigma, 0.f, 15.f, 0.001f);
-    }
+    widget.checkbox("Rectify Color", mControls.rectifyColor);
 
-    boolDropdown("ClipMode", mControls.useClipping, "Clamp", "Clip");
+    if (mControls.rectifyColor)
+    {
+        boolDropdown("Color-Box", mControls.useColorVariance, "BoundingBox", "Variance");
+        if (mControls.useColorVariance)
+        {
+            widget.var("Color-Box Sigma", mControls.colorBoxSigma, 0.f, 15.f, 0.001f);
+        }
+
+        boolDropdown("ClipMode", mControls.useClipping, "Clamp", "Clip");
+    }
 
     boolDropdown("Color Fetch", mControls.bicubicColorFetch, "Bilinear", "Bicubic");
 

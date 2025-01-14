@@ -37,7 +37,8 @@ cbuffer PerFrameCB
     bool gUseColorVariance; // otherwise bounding box
     bool gBicubicColorFetch; // otherwise bilinear
     bool gUseClipping; // otherwise clamping
-    bool gUseHistory; // otherwise exponential decay
+    bool gUseHistory;  // otherwise exponential decay
+    bool gRectifyColor; // otherwise no rectification
     int gMaxHistory; // max count for history
 };
 
@@ -286,16 +287,20 @@ PSOut main(float2 texC : TEXCOORD) : SV_TARGET0
     }
 
     float3 originalHistory = history;
-    if(gUseClipping)
+    if (gRectifyColor)
     {
-        history.x = clamp(history.x, colorMin.x, colorMax.x); // clamp luma
-        if (gUseColorVariance)
-            // history.yz = clipEllipse(colorAvg.yz, gColorBoxSigma * sigma.yz, history.yz); // clip chroma
-            history.yz = clipEllipse(colorAvg.yz, gColorBoxSigma * sigma.yz, history.yz, color.yz); // clip chroma
-        else
-            history.yz = clipBox(colorMin.yz, colorMax.yz, history.yz, color.yz); // clip chroma
+        if (gUseClipping)
+        {
+            history.x = clamp(history.x, colorMin.x, colorMax.x); // clamp luma
+            if (gUseColorVariance)
+                // history.yz = clipEllipse(colorAvg.yz, gColorBoxSigma * sigma.yz, history.yz); // clip chroma
+                history.yz = clipEllipse(colorAvg.yz, gColorBoxSigma * sigma.yz, history.yz, color.yz); // clip chroma
+            else
+                history.yz = clipBox(colorMin.yz, colorMax.yz, history.yz, color.yz); // clip chroma
+        }
+        else history = clamp(history, colorMin, colorMax); // clamping
     }
-    else history = clamp(history, colorMin, colorMax);
+    
     
     if(any(originalHistory != history)) N = 0; // reset history
 
@@ -307,8 +312,9 @@ PSOut main(float2 texC : TEXCOORD) : SV_TARGET0
     }
     else
     {
-        
+
         float3 result = YCgCoToRGB(lerp(history, color, alpha));
+        //float3 result = lerp(YCgCoToRGB(history), YCgCoToRGB(color), alpha);
         output.color = float4(result, 1.f);
     }
     

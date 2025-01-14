@@ -68,6 +68,7 @@ private:
         float colorBoxSigma = 1.0f;
         bool antiFlicker = true;
         bool useMaxMotionVector = true;
+        bool rectifyColor = true; // otherwise color will be taken as is
         bool useColorVariance = true; // otherwise color bounding box
         bool bicubicColorFetch = true; // otherwise bilinear
         bool useClipping = false; // otherwise use clamping
