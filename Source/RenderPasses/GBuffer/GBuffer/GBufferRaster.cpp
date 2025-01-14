@@ -50,6 +50,7 @@ namespace
         { "pnFwidth",       "gPosNormalFwidth",     "Position and guide normal filter width",   true /* optional */, ResourceFormat::RG32Float   },
         { "linearZ",        "gLinearZAndDeriv",     "Linear z (and derivative)",                true /* optional */, ResourceFormat::RG32Float   },
         { "mask",           "gMask",                "Mask",                                     true /* optional */, ResourceFormat::R32Float    },
+        {"prevLinearZ",     "gPrevLinearZ",         "Linear z of the pixel from previous frame", true /*optional */, ResourceFormat::R32Float    },
     };
 
     const std::string kDepthName = "depth";

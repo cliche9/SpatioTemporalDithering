@@ -59,7 +59,8 @@ RasterizerOrderedTexture2D<float4> gEmissive;
 RasterizerOrderedTexture2D<float4> gViewW;
 RasterizerOrderedTexture2D<float2> gPosNormalFwidth;
 RasterizerOrderedTexture2D<float2> gLinearZAndDeriv;
-RasterizerOrderedTexture2D<float>  gMask;
+RasterizerOrderedTexture2D<float> gMask;
+RasterizerOrderedTexture2D<float> gPrevLinearZ;
 
 #define is_valid(name) (is_valid_##name != 0)
 
@@ -123,7 +124,8 @@ GBufferPSOut psMain(VSOut vsOut, uint triangleIndex : SV_PrimitiveID, float3 bar
     if (is_valid(gDiffOpacity))     gDiffOpacity[ipos]  = gbuf.diffuseOpacity;
     if (is_valid(gSpecRough))       gSpecRough[ipos]    = gbuf.specRough;
     if (is_valid(gEmissive))        gEmissive[ipos]     = gbuf.emissive;
-    if (is_valid(gMask))            gMask[ipos]         = 1.f;
+    if (is_valid(gMask))            gMask[ipos] = 1.f;
+    if (is_valid(gPrevLinearZ))     gPrevLinearZ[ipos] = vsOut.prevPosH.w;
 
     // Length of derivatives of position and guide normal.
     // This is a feature guide for the SVGF denoiser pass.
