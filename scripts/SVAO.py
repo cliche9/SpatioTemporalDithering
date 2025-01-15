@@ -65,6 +65,8 @@ def render_graph_SVAO():
     g.add_edge('GBufferRaster.faceNormalW', 'RayMSAA.normals')
     g.add_edge('LinearizeDepth.linearDepth', 'RayMSAA.linearZ')
     g.add_edge('DiffuseRef.out', 'RayMSAA.color')
+    g.add_edge('LinearizeDepth.linearDepth', 'DiffuseTAA.linearZ')
+    g.add_edge('GBufferRaster.prevLinearZ', 'DiffuseTAA.prevLinearZ')
     g.mark_output('AmbientRef.out')
     g.mark_output('DiffuseRef.out')
     g.mark_output('AmbientTAA.colorOut')

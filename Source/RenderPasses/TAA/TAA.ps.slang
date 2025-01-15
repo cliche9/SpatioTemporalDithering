@@ -39,6 +39,7 @@ cbuffer PerFrameCB
     bool gUseClipping; // otherwise clamping
     bool gUseHistory;  // otherwise exponential decay
     bool gRectifyColor; // otherwise no rectification
+    bool gRejectOccluded;
     int gMaxHistory; // max count for history
 };
 
@@ -48,6 +49,10 @@ Texture2D gTexPrevColor;
 Texture2D gTexPrevHistory;
 SamplerState gSampler;
 
+Texture2D<float> gTexLinearZ;
+Texture2D<float> gTexPrevLinearZPixel; // the previous linearZ from the current pixel (do not use motion vectors for this)
+Texture2D<float> gTexPrevLinearZ; // copy of linearZ from the previous frame (needs motion vectors for lookup)
+
 float encodeHistory(int history)
 {
     return history / 255.0;
@@ -56,6 +61,25 @@ float encodeHistory(int history)
 int decodeHistory(float history)
 {
     return int(history * 255.0 + 0.5);
+}
+
+bool previousOccluded(int2 pixelPos, float2 prevUV)
+{
+    float expectedPrevDepth = gTexPrevLinearZPixel[pixelPos];
+    float4 actualPrevDepthGather = gTexPrevLinearZ.Gather(gSampler, prevUV);
+    if(expectedPrevDepth <= 0.0) return true; // previous pixel was behind camera (TODO maybe replace with near plane?)
+
+    for (uint i = 0; i < 4; ++i)
+    {
+        // float actualPrevDepth = gTexPrevLinearZ.SampleLevel(gSampler, prevUV, 0);
+        float actualPrevDepth = actualPrevDepthGather[i];
+        float relativeDiff = actualPrevDepth / expectedPrevDepth;
+        if (relativeDiff < 0.995) return true; // previous pixel was occluded
+    }
+
+    
+
+    return false; 
 }
 
 // Catmull-Rom filtering code from http://vec3.ca/bicubic-filtering-in-fewer-taps/
@@ -300,7 +324,20 @@ PSOut main(float2 texC : TEXCOORD) : SV_TARGET0
         }
         else history = clamp(history, colorMin, colorMax); // clamping
     }
-    
+
+    if (gRejectOccluded) if (previousOccluded(ipos, texC + motion))
+    {
+        // reset color and history
+        history = color;
+        N = 0;
+    }
+
+    // reset if reprojection was out of bounds
+    if (any(texC + motion != saturate(texC + motion)))
+    {
+        history = color;
+        N = 0;
+    }
     
     if(any(originalHistory != history)) N = 0; // reset history
 

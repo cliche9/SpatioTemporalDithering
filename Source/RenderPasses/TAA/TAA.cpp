@@ -33,6 +33,11 @@ namespace
     const std::string kColorIn = "colorIn";
     const std::string kColorOut = "colorOut";
 
+    const std::string kLinearZ = "linearZ";
+    const std::string kPrevLinearZ = "prevLinearZ";
+    //const std::string kNormals = "normals";
+    //const std::string kMeshId = "meshId";
+
     const std::string kAlpha = "alpha";
     const std::string kColorBoxSigma = "colorBoxSigma";
     const std::string kAntiFlicker = "antiFlicker";
@@ -88,7 +93,12 @@ RenderPassReflection TAA::reflect(const CompileData& compileData)
     RenderPassReflection reflection;
     reflection.addInput(kMotionVec, "Screen-space motion vectors");
     reflection.addInput(kColorIn, "Color-buffer of the current frame");
-    
+
+    // optional inputs
+    reflection.addInput(kLinearZ, "Linear depth buffer").flags(RenderPassReflection::Field::Flags::Optional);
+    reflection.addInput(kPrevLinearZ, "Linear depth buffer of the previous frame").flags(RenderPassReflection::Field::Flags::Optional);
+
+
     reflection.addOutput(kColorOut, "Anti-aliased color buffer");
     reflection.addOutput(kHistory, "history counts").format(ResourceFormat::R8Unorm);
     return reflection;
@@ -100,6 +110,11 @@ void TAA::execute(RenderContext* pRenderContext, const RenderData& renderData)
     const auto& pColorOut = renderData.getTexture(kColorOut);
     const auto& pMotionVec = renderData.getTexture(kMotionVec);
     const auto& pDebugHistory = renderData.getTexture(kHistory);
+    auto pLinearZ = renderData.getTexture(kLinearZ);
+    auto pPrevLinearZ = renderData.getTexture(kPrevLinearZ);
+
+    if (!pLinearZ || !pPrevLinearZ) mControls.rejectOccluded = false; // cannot use this without the depth buffers
+
     if(!mEnabled)
     {
         pRenderContext->blit(pColorIn->getSRV(), pColorOut->getRTV());
@@ -126,10 +141,14 @@ void TAA::execute(RenderContext* pRenderContext, const RenderData& renderData)
     var["PerFrameCB"]["gUseHistory"] = mControls.useHistory;
     var["PerFrameCB"]["gMaxHistory"] = mControls.maxHistory;
     var["PerFrameCB"]["gRectifyColor"] = mControls.rectifyColor;
+    var["PerFrameCB"]["gRejectOccluded"] = mControls.rejectOccluded;
     var["gTexColor"] = pColorIn;
     var["gTexMotionVec"] = pMotionVec;
     var["gTexPrevColor"] = mpPrevColor;
-    var["gTexPrevHistory"] = mpPrevHistory; // bind previous history
+    var["gTexPrevHistory"] = mpPrevHistory; // bind previous history   
+    var["gTexLinearZ"] = pLinearZ;
+    var["gTexPrevLinearZPixel"] = pPrevLinearZ;
+    var["gTexPrevLinearZ"] = mpPrevLinearZ;
     var["gSampler"] = mpLinearSampler;
 
     mpPass->execute(pRenderContext, mpFbo);
@@ -137,7 +156,19 @@ void TAA::execute(RenderContext* pRenderContext, const RenderData& renderData)
 
     pRenderContext->blit(mpCurHistory->getSRV(), pDebugHistory->getRTV());
 
+    if(pLinearZ)
+    {
+        pRenderContext->blit(pLinearZ->getSRV(), mpPrevLinearZ->getRTV()); // save depth values for the next frame to detect occlusions/disocclusions   
+    }
+
     std::swap(mpPrevHistory, mpCurHistory);
+
+    if(mClear)
+    {
+        pRenderContext->blit(pColorIn->getSRV(), mpPrevColor->getRTV());
+        pRenderContext->clearRtv(mpPrevHistory->getRTV().get(), float4(0.0f));
+        mClear = false;
+    }
 }
 
 void TAA::allocatePrevColorAndHistory(const Texture* pColorOut)
@@ -153,6 +184,7 @@ void TAA::allocatePrevColorAndHistory(const Texture* pColorOut)
     mpPrevColor = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), pColorOut->getFormat(), 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
     mpPrevHistory = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), ResourceFormat::R8Unorm, 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
     mpCurHistory = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), ResourceFormat::R8Unorm, 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
+    mpPrevLinearZ = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), ResourceFormat::R32Float, 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
 }
 
 void TAA::renderUI(Gui::Widgets& widget)
@@ -200,4 +232,9 @@ void TAA::renderUI(Gui::Widgets& widget)
         widget.var("Alpha", mControls.alpha, 0.f, 1.0f, 0.001f);
         widget.checkbox("Anti Flicker", mControls.antiFlicker);
     }
+
+    widget.checkbox("Reject Occluded", mControls.rejectOccluded);
+
+    if (widget.button("Clear"))
+        mClear = true;
 }
