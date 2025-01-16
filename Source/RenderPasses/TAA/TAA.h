@@ -79,6 +79,7 @@ private:
     ref<Texture> mpPrevColor;
     ref<Texture> mpPrevMotion;
     ref<Texture> mpPrevLinearZ;
+    ref<Texture> mpPrevVBuffer;
 
     CpuTimer mTimer;
     float mCurrentDelta = 0.0f;

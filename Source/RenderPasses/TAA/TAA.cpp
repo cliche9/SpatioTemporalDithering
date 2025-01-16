@@ -38,6 +38,7 @@ namespace
     const std::string kMotionMask = "motionMask";
 
     const std::string kLinearZ = "linearZ";
+    const std::string kVBuffer = "vbuffer";
     const std::string kPrevLinearZ = "prevLinearZ";
     //const std::string kNormals = "normals";
     //const std::string kMeshId = "meshId";
@@ -99,7 +100,7 @@ RenderPassReflection TAA::reflect(const CompileData& compileData)
     // optional inputs
     reflection.addInput(kLinearZ, "Linear depth buffer").flags(RenderPassReflection::Field::Flags::Optional);
     reflection.addInput(kPrevLinearZ, "Linear depth buffer of the previous frame").flags(RenderPassReflection::Field::Flags::Optional);
-
+    reflection.addInput(kVBuffer, "V-buffer").flags(RenderPassReflection::Field::Flags::Optional);
 
     reflection.addOutput(kColorOut, "Anti-aliased color buffer");
     reflection.addOutput(kMotionMask, "Mask used for motion").format(ResourceFormat::R8Unorm); // TODO optional
@@ -120,6 +121,7 @@ void TAA::execute(RenderContext* pRenderContext, const RenderData& renderData)
     auto pLinearZ = renderData.getTexture(kLinearZ);
     auto pPrevLinearZ = renderData.getTexture(kPrevLinearZ);
     auto pMotionMaskOut = renderData.getTexture(kMotionMask);
+    auto pVBuffer = renderData.getTexture(kVBuffer);
 
     if (!pLinearZ || !pPrevLinearZ) mControls.rejectOccluded = false; // cannot use this without the depth buffers
 
@@ -158,6 +160,8 @@ void TAA::execute(RenderContext* pRenderContext, const RenderData& renderData)
     var["gTexLinearZ"] = pLinearZ;
     var["gTexPrevLinearZPixel"] = pPrevLinearZ;
     var["gTexPrevLinearZ"] = mpPrevLinearZ;
+    var["gTexVBuffer"] = pVBuffer;
+    var["gTexPrevVBuffer"] = mpPrevVBuffer;
     var["gSampler"] = mpLinearSampler;
 
     mpPass->execute(pRenderContext, mpFbo);
@@ -166,6 +170,10 @@ void TAA::execute(RenderContext* pRenderContext, const RenderData& renderData)
     if(pLinearZ)
     {
         pRenderContext->blit(pLinearZ->getSRV(), mpPrevLinearZ->getRTV()); // save depth values for the next frame to detect occlusions/disocclusions   
+    }
+    if(pVBuffer)
+    {
+        pRenderContext->blit(pVBuffer->getSRV(), mpPrevVBuffer->getRTV());
     }
     pRenderContext->blit(pMotionVec->getSRV(), mpPrevMotion->getRTV());
 
@@ -189,6 +197,7 @@ void TAA::allocatePrevColorAndHistory(const Texture* pColorOut)
     mpPrevColor = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), pColorOut->getFormat(), 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
     mpPrevMotion = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), ResourceFormat::RG32Float, 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
     mpPrevLinearZ = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), ResourceFormat::R32Float, 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
+    mpPrevVBuffer = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), ResourceFormat::RGBA32Uint, 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
 }
 
 void TAA::renderUI(Gui::Widgets& widget)

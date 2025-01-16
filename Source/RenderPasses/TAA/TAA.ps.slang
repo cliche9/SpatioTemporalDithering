@@ -40,6 +40,7 @@ cbuffer PerFrameCB
     bool gRectifyColor; // otherwise no rectification
     bool gRejectOccluded;
     bool gRejectMotion; // reject on strong motion vector change
+    bool gRejectVBufferMotion; // rejects based on motion of the vbuffer: if the reprojected vbuffer hit is in the current pixel, it can be used, otherwise reject.
     float gPrevFrameDelta; // time deltas for motion vector normalization
     float gCurFrameDelta;
 };
@@ -53,6 +54,9 @@ SamplerState gSampler;
 Texture2D<float> gTexLinearZ;
 Texture2D<float> gTexPrevLinearZPixel; // the previous linearZ from the current pixel (do not use motion vectors for this)
 Texture2D<float> gTexPrevLinearZ; // copy of linearZ from the previous frame (needs motion vectors for lookup)
+
+Texture2D<uint4> gTexVBuffer; // packed vbuffer
+Texture2D<uint4> gTexPrevVBuffer; // packed vbuffer from previous frame
 
 float2 getGatherUV(float2 uv)
 {
@@ -229,12 +233,13 @@ struct PSOut
 
 PSOut main(float2 texC : TEXCOORD) : SV_TARGET0
 {
-    const int2 offset[8] =
+    const int2 offset[9] =
     {
         int2(-1, -1), int2(-1, 1),
-                              int2(1, -1), int2(1, 1),
-                              int2(1, 0), int2(0, -1),
-                              int2(0, 1), int2(-1, 0),
+        int2(1, -1), int2(1, 1),
+        int2(1, 0), int2(0, -1),
+        int2(0, 1), int2(-1, 0),
+        int2(0, 0) // center for convenience
     };
 
     uint2 texDim;
@@ -290,7 +295,16 @@ PSOut main(float2 texC : TEXCOORD) : SV_TARGET0
         }
     }
     float2 prevMotion = gTexPrevMotionVec.SampleLevel(gSampler, texC + motion, 0).xy;
-    
+    {
+        int2 iposprev = int2((texC + motion) * texDim);
+        prevMotion = gTexPrevMotionVec[iposprev].xy;
+        for (int i = 0; i < 8; ++i)
+        {
+            float2 m = gTexPrevMotionVec[iposprev + offset[i]].xy;
+            // take previous motion with largest difference to current motion
+            prevMotion = length(motion - m) > length(motion - prevMotion) ? m : prevMotion;
+        }
+    }
 
     // Use motion vector to fetch previous frame color (history)
     float3 history;
@@ -342,9 +356,9 @@ PSOut main(float2 texC : TEXCOORD) : SV_TARGET0
     PSOut output;
     // motion = motion / gCurFrameDelta;
     // prevMotion = prevMotion / gPrevFrameDelta;
-    // output.motionMask = length(motion - prevMotion) / max(max(length(motion), length(prevMotion)), 0.001);
-    // output.motionMask = length(motion - prevMotion) * 30.0;
-    output.motionMask = sqrt(abs(dot(motion, motion) - dot(prevMotion, prevMotion))) * 100.0;
+    output.motionMask = length(motion - prevMotion) / max(max(length(motion), length(prevMotion)), 0.001);
+    //output.motionMask = length(motion - prevMotion) * 30.0;
+   // output.motionMask = sqrt(abs(dot(motion, motion) - dot(prevMotion, prevMotion))) * 100.0;
     // increase alpha based on motion
     if (gRejectMotion) alpha = lerp(alpha, 1.f, saturate(output.motionMask / 1.0));
     output.motionMask = alpha;
