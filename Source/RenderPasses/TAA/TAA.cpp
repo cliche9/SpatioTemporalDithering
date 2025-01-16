@@ -27,11 +27,15 @@
  **************************************************************************/
 #include "TAA.h"
 
+#include "RenderGraph/RenderPassStandardFlags.h"
+
 namespace
 {
     const std::string kMotionVec = "motionVecs";
     const std::string kColorIn = "colorIn";
     const std::string kColorOut = "colorOut";
+
+    const std::string kMotionMask = "motionMask";
 
     const std::string kLinearZ = "linearZ";
     const std::string kPrevLinearZ = "prevLinearZ";
@@ -98,16 +102,24 @@ RenderPassReflection TAA::reflect(const CompileData& compileData)
 
 
     reflection.addOutput(kColorOut, "Anti-aliased color buffer");
+    reflection.addOutput(kMotionMask, "Mask used for motion").format(ResourceFormat::R8Unorm); // TODO optional
     return reflection;
 }
 
 void TAA::execute(RenderContext* pRenderContext, const RenderData& renderData)
 {
+    // update timer
+    mTimer.update();
+    mPreviousDelta = mCurrentDelta;
+    mCurrentDelta = mTimer.delta();
+
+    // get resources
     const auto& pColorIn = renderData.getTexture(kColorIn);
     const auto& pColorOut = renderData.getTexture(kColorOut);
     const auto& pMotionVec = renderData.getTexture(kMotionVec);
     auto pLinearZ = renderData.getTexture(kLinearZ);
     auto pPrevLinearZ = renderData.getTexture(kPrevLinearZ);
+    auto pMotionMaskOut = renderData.getTexture(kMotionMask);
 
     if (!pLinearZ || !pPrevLinearZ) mControls.rejectOccluded = false; // cannot use this without the depth buffers
 
@@ -116,9 +128,10 @@ void TAA::execute(RenderContext* pRenderContext, const RenderData& renderData)
         pRenderContext->blit(pColorIn->getSRV(), pColorOut->getRTV());
         return;
     }
-
+    
     allocatePrevColorAndHistory(pColorOut.get());
     mpFbo->attachColorTarget(pColorOut, 0);
+    mpFbo->attachColorTarget(pMotionMaskOut, 1);
 
     // Make sure the dimensions match
     FALCOR_ASSERT((pColorIn->getWidth() == mpPrevColor->getWidth()) && (pColorIn->getWidth() == pMotionVec->getWidth()));
@@ -135,8 +148,12 @@ void TAA::execute(RenderContext* pRenderContext, const RenderData& renderData)
     var["PerFrameCB"]["gUseClipping"] = mControls.useClipping;
     var["PerFrameCB"]["gRectifyColor"] = mControls.rectifyColor;
     var["PerFrameCB"]["gRejectOccluded"] = mControls.rejectOccluded;
+    var["PerFrameCB"]["gRejectMotion"] = mControls.rejectMotion;
+    var["PerFrameCB"]["gPrevFrameDelta"] = std::max(mPreviousDelta, 0.000001f);
+    var["PerFrameCB"]["gCurFrameDelta"] = std::max(mCurrentDelta, 0.000001f);
     var["gTexColor"] = pColorIn;
     var["gTexMotionVec"] = pMotionVec;
+    var["gTexPrevMotionVec"] = mpPrevMotion;
     var["gTexPrevColor"] = mpPrevColor;
     var["gTexLinearZ"] = pLinearZ;
     var["gTexPrevLinearZPixel"] = pPrevLinearZ;
@@ -150,6 +167,7 @@ void TAA::execute(RenderContext* pRenderContext, const RenderData& renderData)
     {
         pRenderContext->blit(pLinearZ->getSRV(), mpPrevLinearZ->getRTV()); // save depth values for the next frame to detect occlusions/disocclusions   
     }
+    pRenderContext->blit(pMotionVec->getSRV(), mpPrevMotion->getRTV());
 
     if(mClear)
     {
@@ -169,6 +187,7 @@ void TAA::allocatePrevColorAndHistory(const Texture* pColorOut)
 
     if (!allocate) return;
     mpPrevColor = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), pColorOut->getFormat(), 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
+    mpPrevMotion = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), ResourceFormat::RG32Float, 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
     mpPrevLinearZ = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), ResourceFormat::R32Float, 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
 }
 
@@ -212,6 +231,7 @@ void TAA::renderUI(Gui::Widgets& widget)
     
 
     widget.checkbox("Reject Occluded", mControls.rejectOccluded);
+    widget.checkbox("Reject Motion", mControls.rejectMotion);
 
     if (widget.button("Clear"))
         mClear = true;

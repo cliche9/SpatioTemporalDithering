@@ -66,18 +66,23 @@ private:
     {
         float alpha = 0.1f;
         float colorBoxSigma = 1.0f;
-        bool antiFlicker = true;
-        bool useMaxMotionVector = true;
+        bool antiFlicker = false;
+        bool useMaxMotionVector = false;
         bool rectifyColor = true; // otherwise color will be taken as is
         bool useColorVariance = true; // otherwise color bounding box
         bool bicubicColorFetch = true; // otherwise bilinear
         bool useClipping = false; // otherwise use clamping
         bool rejectOccluded = false;
+        bool rejectMotion = false; // reject if motion change is too strong
     } mControls;
 
     ref<Texture> mpPrevColor;
-
+    ref<Texture> mpPrevMotion;
     ref<Texture> mpPrevLinearZ;
+
+    CpuTimer mTimer;
+    float mCurrentDelta = 0.0f;
+    float mPreviousDelta = 0.0f;
 
     bool mEnabled = true;
     bool mClear = false;

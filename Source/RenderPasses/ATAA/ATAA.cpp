@@ -134,7 +134,7 @@ void ATAA::allocatePrevColor(const Texture* pColor)
     allocate = allocate || (mpPrevColor->getHeight() != pColor->getHeight());
     allocate = allocate || (mpPrevColor->getDepth() != pColor->getDepth());
     allocate = allocate || (mpPrevColor->getFormat() != pColor->getFormat());
-    FALCOR_ASSERT(pColorOut->getSampleCount() == 1);
+    FALCOR_ASSERT(pColor->getSampleCount() == 1);
 
     if (!allocate) return;
     mpPrevColor = Texture::create2D(mpDevice, pColor->getWidth(), pColor->getHeight(), pColor->getFormat(), 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);

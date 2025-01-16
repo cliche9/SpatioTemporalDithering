@@ -39,10 +39,14 @@ cbuffer PerFrameCB
     bool gUseClipping; // otherwise clamping
     bool gRectifyColor; // otherwise no rectification
     bool gRejectOccluded;
+    bool gRejectMotion; // reject on strong motion vector change
+    float gPrevFrameDelta; // time deltas for motion vector normalization
+    float gCurFrameDelta;
 };
 
 Texture2D gTexColor;
 Texture2D gTexMotionVec;
+Texture2D gTexPrevMotionVec;
 Texture2D gTexPrevColor;
 SamplerState gSampler;
 
@@ -50,21 +54,32 @@ Texture2D<float> gTexLinearZ;
 Texture2D<float> gTexPrevLinearZPixel; // the previous linearZ from the current pixel (do not use motion vectors for this)
 Texture2D<float> gTexPrevLinearZ; // copy of linearZ from the previous frame (needs motion vectors for lookup)
 
+float2 getGatherUV(float2 uv)
+{
+    uint2 resolution;
+    uint levels;
+    gTexColor.GetDimensions(0, resolution.x, resolution.y, levels);
+    return (floor(uv * float2(resolution) - 0.5) + 1.0) / resolution; // snap to center between 4 texels
+}
+
 bool previousOccluded(int2 pixelPos, float2 prevUV)
 {
     float expectedPrevDepth = gTexPrevLinearZPixel[pixelPos];
-    float4 actualPrevDepthGather = gTexPrevLinearZ.Gather(gSampler, prevUV);
     if(expectedPrevDepth <= 0.0) return true; // previous pixel was behind camera (TODO maybe replace with near plane?)
 
+    // 4x neighborhood
+    float4 actualPrevDepthGather = gTexPrevLinearZ.Gather(gSampler, getGatherUV(prevUV));
     for (uint i = 0; i < 4; ++i)
     {
         // float actualPrevDepth = gTexPrevLinearZ.SampleLevel(gSampler, prevUV, 0);
         float actualPrevDepth = actualPrevDepthGather[i];
         float relativeDiff = actualPrevDepth / expectedPrevDepth;
         if (relativeDiff < 0.995) return true; // previous pixel was occluded
+        //if (relativeDiff < 0.999) return true; // previous pixel was occluded
     }
 
-    
+    // 9x neighborhood
+
 
     return false; 
 }
@@ -209,6 +224,7 @@ float2 clipBox(float2 minv, float2 maxv, float2 lineStart, float2 lineEnd)
 struct PSOut
 {
     float4 color : SV_TARGET0;
+    float motionMask : SV_TARGET1;
 };
 
 PSOut main(float2 texC : TEXCOORD) : SV_TARGET0
@@ -262,6 +278,7 @@ PSOut main(float2 texC : TEXCOORD) : SV_TARGET0
     
 
     float2 motion = gTexMotionVec.Load(int3(ipos, 0)).xy;
+
     if(gUseMaxMotionVector)
     {
         // Find the longest motion vector
@@ -272,6 +289,7 @@ PSOut main(float2 texC : TEXCOORD) : SV_TARGET0
             motion = dot(m, m) > dot(motion, motion) ? m : motion;
         }
     }
+    float2 prevMotion = gTexPrevMotionVec.SampleLevel(gSampler, texC + motion, 0).xy;
     
 
     // Use motion vector to fetch previous frame color (history)
@@ -322,8 +340,24 @@ PSOut main(float2 texC : TEXCOORD) : SV_TARGET0
     }
 
     PSOut output;
+    // motion = motion / gCurFrameDelta;
+    // prevMotion = prevMotion / gPrevFrameDelta;
+    // output.motionMask = length(motion - prevMotion) / max(max(length(motion), length(prevMotion)), 0.001);
+    // output.motionMask = length(motion - prevMotion) * 30.0;
+    output.motionMask = sqrt(abs(dot(motion, motion) - dot(prevMotion, prevMotion))) * 100.0;
+    // increase alpha based on motion
+    if (gRejectMotion) alpha = lerp(alpha, 1.f, saturate(output.motionMask / 1.0));
+    output.motionMask = alpha;
+
     float3 result = YCgCoToRGB(lerp(history, color, alpha));
     output.color = float4(result, 1.f);
-    
+
+    // output.motionMask = length(motion - prevMotion) / (length(motion) + 0.1);
+    // normalize motion vector by time delta
+
+
+    //output.motionMask = abs(length(motion) - length(prevMotion)) / max(min(length(motion), length(prevMotion)), 0.01);
+
+    // output.motionMask = output.motionMask > 0.5 ? 1.0 : 0.0;
     return output;
 }
