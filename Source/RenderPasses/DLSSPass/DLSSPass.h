@@ -40,19 +40,25 @@ public:
 
     enum class Profile : uint32_t
     {
-        MaxPerf,
+        MaxPerformance,
         Balanced,
         MaxQuality,
+        UltraPerformance,
+        //UltraQuality, //Not Available
+        DLAA,
     };
 
     FALCOR_ENUM_INFO(
         Profile,
         {
-            {Profile::MaxPerf, "MaxPerf"},
+            {Profile::UltraPerformance, "UltraPerformance"},
+            {Profile::MaxPerformance, "MaxPerformance"},
             {Profile::Balanced, "Balanced"},
             {Profile::MaxQuality, "MaxQuality"},
+            //{Profile::UltraQuality, "UltraQuality"}, //Not Available
+            {Profile::DLAA, "DLAA"},
         }
-    );
+        );
 
     enum class MotionVectorScale : uint32_t
     {
@@ -66,7 +72,7 @@ public:
             {MotionVectorScale::Absolute, "Absolute"},
             {MotionVectorScale::Relative, "Relative"},
         }
-    );
+        );
 
     static ref<DLSSPass> create(ref<Device> pDevice, const Properties& props) { return make_ref<DLSSPass>(pDevice, props); }
 
@@ -84,9 +90,10 @@ private:
 
     // Options
     bool mEnabled = true;
-    Profile mProfile = Profile::Balanced;
-    MotionVectorScale mMotionVectorScale = MotionVectorScale::Absolute;
+    Profile mProfile = Profile::DLAA;
+    MotionVectorScale mMotionVectorScale = MotionVectorScale::Relative;
     bool mIsHDR = true;
+    bool mUseJitterMVFlag = false;   //This seems to fix the ghosting issue
     float mSharpness = 0.f;
     float mExposure = 0.f;
     bool mExposureUpdated = true;

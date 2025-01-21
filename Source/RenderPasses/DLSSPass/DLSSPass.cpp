@@ -29,19 +29,20 @@
 
 namespace
 {
-const char kColorInput[] = "color";
-const char kDepthInput[] = "depth";
-const char kMotionVectorsInput[] = "mvec";
-const char kOutput[] = "output";
+    const char kColorInput[] = "color";
+    const char kDepthInput[] = "depth";
+    const char kMotionVectorsInput[] = "mvec";
+    const char kOutput[] = "output";
 
-// Scripting options.
-const char kEnabled[] = "enabled";
-const char kOutputSize[] = "outputSize";
-const char kProfile[] = "profile";
-const char kMotionVectorScale[] = "motionVectorScale";
-const char kIsHDR[] = "isHDR";
-const char kSharpness[] = "sharpness";
-const char kExposure[] = "exposure";
+    // Scripting options.
+    const char kEnabled[] = "enabled";
+    const char kOutputSize[] = "outputSize";
+    const char kProfile[] = "profile";
+    const char kMotionVectorScale[] = "motionVectorScale";
+    const char kIsHDR[] = "isHDR";
+    const char kUseJitteredMV[] = "useJitteredMV";
+    const char kSharpness[] = "sharpness";
+    const char kExposure[] = "exposure";
 }; // namespace
 
 static void registerDLSSPass(pybind11::module& m)
@@ -69,6 +70,8 @@ DLSSPass::DLSSPass(ref<Device> pDevice, const Properties& props) : RenderPass(pD
             mMotionVectorScale = value;
         else if (key == kIsHDR)
             mIsHDR = value;
+        else if (key == kUseJitteredMV)
+            mUseJitterMVFlag = value;
         else if (key == kSharpness)
             mSharpness = value;
         else if (key == kExposure)
@@ -91,6 +94,7 @@ Properties DLSSPass::getProperties() const
     props[kProfile] = mProfile;
     props[kMotionVectorScale] = mMotionVectorScale;
     props[kIsHDR] = mIsHDR;
+    props[kUseJitteredMV] = mUseJitterMVFlag;
     props[kSharpness] = mSharpness;
     props[kExposure] = mExposure;
     return props;
@@ -153,6 +157,9 @@ void DLSSPass::renderUI(Gui::Widgets& widget)
         mRecreate |= widget.checkbox("HDR", mIsHDR);
         widget.tooltip("Enable if input color is HDR.");
 
+        //mRecreate |= widget.checkbox("MVecJitterFlag", mUseJitterMVFlag);
+        //widget.tooltip("Should be technically wrong as the jitter is removed from the motion vectory, but fixes the ghosting error on moving geometry");
+
         widget.slider("Sharpness", mSharpness, -1.f, 1.f);
         widget.tooltip("Sharpening value between 0.0 and 1.0.");
 
@@ -175,7 +182,10 @@ void DLSSPass::initializeDLSS(RenderContext* pRenderContext)
     NVSDK_NGX_PerfQuality_Value perfQuality = NVSDK_NGX_PerfQuality_Value_Balanced;
     switch (mProfile)
     {
-    case Profile::MaxPerf:
+    case Profile::UltraPerformance:
+        perfQuality = NVSDK_NGX_PerfQuality_Value_UltraPerformance;
+        break;
+    case Profile::MaxPerformance:
         perfQuality = NVSDK_NGX_PerfQuality_Value_MaxPerf;
         break;
     case Profile::Balanced:
@@ -184,9 +194,17 @@ void DLSSPass::initializeDLSS(RenderContext* pRenderContext)
     case Profile::MaxQuality:
         perfQuality = NVSDK_NGX_PerfQuality_Value_MaxQuality;
         break;
+        //case Profile::UltraQuality:  //Not Available
+        //    perfQuality = NVSDK_NGX_PerfQuality_Value_UltraQuality;
+        //    break;
+    case Profile::DLAA:
+        perfQuality = NVSDK_NGX_PerfQuality_Value_DLAA;
+        break;
     }
 
     auto optimalSettings = mpNGXWrapper->queryOptimalSettings(mInputSize, perfQuality);
+
+    mSharpness = optimalSettings.sharpness;
 
     mDLSSOutputSize = uint2(float2(mInputSize) * float2(mInputSize) / float2(optimalSettings.optimalRenderSize));
     mpOutput = Texture::create2D(
@@ -195,7 +213,7 @@ void DLSSPass::initializeDLSS(RenderContext* pRenderContext)
     );
 
     mpNGXWrapper->releaseDLSS();
-    mpNGXWrapper->initializeDLSS(pRenderContext, mInputSize, mDLSSOutputSize, target, mIsHDR, depthInverted, perfQuality);
+    mpNGXWrapper->initializeDLSS(pRenderContext, mInputSize, mDLSSOutputSize, target, mIsHDR, depthInverted, mUseJitterMVFlag, perfQuality);
 }
 
 void DLSSPass::executeInternal(RenderContext* pRenderContext, const RenderData& renderData)
@@ -205,8 +223,8 @@ void DLSSPass::executeInternal(RenderContext* pRenderContext, const RenderData& 
     const auto& pColor = renderData.getTexture(kColorInput);
     FALCOR_ASSERT(pColor && pOutput);
 
-    mPassOutputSize = {pOutput->getWidth(), pOutput->getHeight()};
-    const uint2 inputSize = {pColor->getWidth(), pColor->getHeight()};
+    mPassOutputSize = { pOutput->getWidth(), pOutput->getHeight() };
+    const uint2 inputSize = { pColor->getWidth(), pColor->getHeight() };
 
     if (!mEnabled || !mpScene)
     {
@@ -238,17 +256,14 @@ void DLSSPass::executeInternal(RenderContext* pRenderContext, const RenderData& 
     {
         // Fetch inputs and verify their dimensions.
         auto getInput = [=](const std::string& name)
-        {
-            auto tex = renderData.getTexture(name);
-            if (!tex)
-                throw RuntimeError("DLSSPass: Missing input '{}'", name);
-            if (tex->getWidth() != mInputSize.x || tex->getHeight() != mInputSize.y)
             {
-                Logger::log(Logger::Level::Warning, "DLSSPass: Input '{" + name + "}' has mismatching size. All inputs must be of the same size.");
-                requestRecompile();
-            }
-            return tex;
-        };
+                auto tex = renderData.getTexture(name);
+                if (!tex)
+                    throw RuntimeError("DLSSPass: Missing input '{}'", name);
+                if (tex->getWidth() != mInputSize.x || tex->getHeight() != mInputSize.y)
+                    throw RuntimeError("DLSSPass: Input '{}' has mismatching size. All inputs must be of the same size.", name);
+                return tex;
+            };
 
         auto color = getInput(kColorInput);
         auto depth = getInput(kDepthInput);
