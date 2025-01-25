@@ -17,10 +17,11 @@ cbuffer PerFrame
 
 RWTexture2D<PackedHitInfo> gVBuffer;
 RWTexture2D<float2> gMotion;
+RWTexture2D<float> gDepth; // normalized depth for DLSS (0-1 range)
 
 struct RayData
 {
-    int dummy;
+    float RayTMax;
 };
 
 void computeRayDifferentials(const TriangleHit hit, float3 rayDir, float hitT, const Camera camera, float2 frameDim, out float2 ddx, out float2 ddy)
@@ -66,6 +67,7 @@ void miss(inout RayData rayData : SV_RayPayload)
     gVBuffer[pixel] = hitInfo.getData();
     // TODO calclate proper motion vectors for environment
     gMotion[pixel] = float2(100.0, 100.0); // use large motion vectors to prevent reprojection (invalidate history)
+    gDepth[pixel] = 1.0;
 }
 
 //Use anyhit for alpha test if activated
@@ -112,6 +114,7 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
     
     gVBuffer[pixel] = HitInfo(triangleHit).getData();
     gMotion[pixel] = calcMotionVector(pixel, frameDim, triangleHit);
+    gDepth[pixel] = RayTCurrent() / rayData.RayTMax; // 0-1 range
 }
 
 [shader("raygeneration")]
@@ -122,6 +125,7 @@ void rayGen()
 
     Ray ray = gScene.camera.computeRayPinhole(pixel, frameDim);
 
-    RayData dummy; // dummy payload
-    TraceRay(gScene.rtAccel, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xff, 0, rayTypeCount, 0, ray.toRayDesc(), dummy);
+    RayData data;
+    data.RayTMax = ray.tMax;
+    TraceRay(gScene.rtAccel, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xff, 0, rayTypeCount, 0, ray.toRayDesc(), data);
 }

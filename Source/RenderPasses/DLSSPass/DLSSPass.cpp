@@ -106,7 +106,7 @@ RenderPassReflection DLSSPass::reflect(const CompileData& compileData)
     const uint2 sz = RenderPassHelpers::calculateIOSize(mOutputSizeSelection, mDLSSOutputSize, compileData.defaultTexDims);
 
     r.addInput(kColorInput, "Color input").bindFlags(ResourceBindFlags::ShaderResource);
-    r.addInput(kDepthInput, "Depth input").bindFlags(ResourceBindFlags::ShaderResource);
+    r.addInput(kDepthInput, "Depth input. 0=near, 1=far").bindFlags(ResourceBindFlags::ShaderResource);
     r.addInput(kMotionVectorsInput, "Motion vectors input").bindFlags(ResourceBindFlags::ShaderResource);
     r.addOutput(kOutput, "Color output")
         .format(ResourceFormat::RGBA32Float)

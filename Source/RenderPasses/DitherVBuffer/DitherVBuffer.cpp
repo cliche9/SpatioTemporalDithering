@@ -31,8 +31,9 @@ namespace
 {
     const std::string kVbuffer = "vbuffer";
     const std::string kMotion = "mvec";
+    const std::string kDepth = "depth";
 
-    const uint32_t kMaxPayloadSizeBytes = 20; // 16 byte hit info + 4 byte distance
+    const uint32_t kMaxPayloadSizeBytes = 4; 
     const std::string kProgramRaytraceFile = "RenderPasses/DitherVBuffer/DitherVBuffer.rt.slang";
 }
 
@@ -58,6 +59,7 @@ RenderPassReflection DitherVBuffer::reflect(const CompileData& compileData)
     RenderPassReflection reflector;
     reflector.addOutput(kVbuffer, "V-buffer").format(HitInfo::kDefaultFormat);
     reflector.addOutput(kMotion, "Motion vector").format(ResourceFormat::RG32Float);
+    reflector.addOutput(kDepth, "Normalized Depth (1=far, 0=origin)").format(ResourceFormat::R32Float);
     return reflector;
 }
 
@@ -69,10 +71,12 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
 
     auto pVbuffer = renderData.getTexture(kVbuffer);
     auto pMotion = renderData.getTexture(kMotion);
+    auto pDepth = renderData.getTexture(kDepth);
 
     auto var = mpVars->getRootVar();
     var["gVBuffer"] = pVbuffer;
     var["gMotion"] = pMotion;
+    var["gDepth"] = pDepth;
     var["PerFrame"]["gFrameCount"] = mFrameCount++;
 
     uint3 dispatch = uint3(1);
