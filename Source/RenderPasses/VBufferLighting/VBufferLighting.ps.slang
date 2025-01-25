@@ -75,6 +75,7 @@ float4 main(float2 texC : TEXCOORD, float4 svPos : SV_POSITION) : SV_TARGET
 
     float3 color = 0.0;
     float3 viewDir = -rayDir[pixel].xyz;
+    if(all(viewDir == 0.0)) viewDir = -gScene.camera.computeRayPinhole(pixel, frameDim).dir;
     if (hit.isValid()) // valid hit
     {
         // Load shading data.

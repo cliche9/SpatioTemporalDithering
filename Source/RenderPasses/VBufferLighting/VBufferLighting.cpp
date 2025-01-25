@@ -76,7 +76,7 @@ RenderPassReflection VBufferLighting::reflect(const CompileData& compileData)
 {
     RenderPassReflection reflector;
     reflector.addInput(kVBuffer, "vbuffer");
-    reflector.addInput(kRayDir, "in view direction");
+    reflector.addInput(kRayDir, "in view direction").flags(RenderPassReflection::Field::Flags::Optional);
     reflector.addInput(kVisBuffer, "Visibility buffer used for shadowing. Range is [0,1] where 0 means the pixel is fully-shadowed and 1 means the pixel is not shadowed at all").flags(RenderPassReflection::Field::Flags::Optional).texture2D(0, 0, 1, 1, 0);
     reflector.addOutput(kColor, "Color texture").format(ResourceFormat::RGBA32Float);
 
@@ -88,9 +88,9 @@ void VBufferLighting::execute(RenderContext* pRenderContext, const RenderData& r
     if (!mpScene) return;
 
     auto pColor = renderData[kColor]->asTexture();
-    auto pVBuffer = renderData[kVBuffer]->asTexture();
-    auto pVisBuffer = renderData[kVisBuffer]->asTexture();
-    auto pRayDir = renderData[kRayDir]->asTexture();
+    auto pVBuffer = renderData.getTexture(kVBuffer);
+    auto pVisBuffer = renderData.getTexture(kVisBuffer);
+    auto pRayDir = renderData.getTexture(kRayDir);
 
     mpFbo->attachColorTarget(pColor, 0);
     auto vars = mpPass->getRootVar();
