@@ -9,6 +9,11 @@
 
 float getPixelDitherThreshold(uint2 pixel)
 {
+    // use random offset to ensure that each primitive uses a different mask
+    uint randomOffset = InstanceID() + GeometryIndex() + PrimitiveIndex() / 2u;
+    pixel.x += randomOffset % 4u;
+    pixel.y += randomOffset / 4u;
+
     #if DITHER_MODE == DITHER_MODE_PER_PIXEL_4X
     pixel = pixel % 2u;
     float2x2 ditherMatrix = float2x2(
