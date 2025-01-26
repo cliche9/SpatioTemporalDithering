@@ -4,6 +4,7 @@ target_sources(DitherVBuffer PRIVATE
     DitherVBuffer.cpp
     DitherVBuffer.h
     DitherVBuffer.rt.slang
+    Dither.slangh
 )
 
 target_copy_shaders(DitherVBuffer RenderPasses/DitherVBuffer)

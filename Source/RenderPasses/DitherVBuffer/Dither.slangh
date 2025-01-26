@@ -1,0 +1,29 @@
+#define DITHER_MODE_DISABLED 0
+#define DITHER_MODE_PER_PIXEL_4X 1
+#define DITHER_MODE_PER_PIXEL_16X 2
+#define DITHER_MODE_PER_JITTER 3
+
+#ifndef DITHER_MODE
+#define DITHER_MODE DITHER_MODE_DISABLED
+#endif
+
+float getPixelDitherThreshold(uint2 pixel)
+{
+    #if DITHER_MODE == DITHER_MODE_PER_PIXEL_4X
+    pixel = pixel % 2u;
+    float2x2 ditherMatrix = float2x2(
+        float2(0.0, 2.0),
+        float2(3.0, 1.0)
+    );
+    return (ditherMatrix[pixel.y][pixel.x] + 0.5) / 4.0;
+    #else // assume 16 x
+    pixel = pixel % 4u;
+    float4x4 ditherMatrix = float4x4(
+        float4(0.0, 8.0, 2.0, 10.0),
+        float4(12.0, 4.0, 14.0, 6.0),
+        float4(3.0, 11.0, 1.0, 9.0),
+        float4(15.0, 7.0, 13.0, 5.0)
+    );
+    return (ditherMatrix[pixel.y][pixel.x] + 0.5) / 16.0;
+    #endif
+}

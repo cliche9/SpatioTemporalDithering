@@ -83,6 +83,8 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["gDepth"] = pDepth;
     var["PerFrame"]["gFrameCount"] = mFrameCount++;
 
+    mpProgram->addDefine("DITHER_MODE", std::to_string(uint32_t(mDitherMode)));
+
     uint3 dispatch = uint3(1);
     dispatch.x = pVbuffer->getWidth();
     dispatch.y = pVbuffer->getHeight();
@@ -96,6 +98,7 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
     {
         mpSamplePattern->setSampleCount(sampleCount);
     }
+    widget.dropdown("Dither", mDitherMode);
 }
 
 void DitherVBuffer::setScene(RenderContext* pRenderContext, const ref<Scene>& pScene)

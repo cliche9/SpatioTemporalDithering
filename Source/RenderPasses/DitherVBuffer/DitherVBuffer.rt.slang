@@ -10,6 +10,8 @@ import Utils.Math.FormatConversion;
 import Rendering.Materials.IsotropicGGX;
 import Utils.Color.ColorHelpers;
 
+#include "Dither.slangh"
+
 cbuffer PerFrame
 {
     uint gFrameCount;       // Frame count since scene was loaded.
@@ -74,6 +76,7 @@ void miss(inout RayData rayData : SV_RayPayload)
 [shader("anyhit")]
 void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAttributes attribs : SV_IntersectionAttributes)
 {
+    uint2 pixel = DispatchRaysIndex().xy;
     uint2 frameDim = DispatchRaysDimensions().xy;
     // Alpha test for non-opaque geometry.
     GeometryInstanceID instanceID = getGeometryInstanceID();
@@ -88,9 +91,17 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     computeRayDifferentials(triangleHit, WorldRayDirection(), RayTCurrent(), gScene.camera, float2(frameDim), ddx, ddy);
     let lod = ExplicitGradientTextureSampler(ddx, ddy);*/
     let lod = ExplicitLodTextureSampler(0.0);
-    // TODO dither options
+
+    #if DITHER_MODE == DITHER_MODE_DISABLED
     if (gScene.materials.alphaTest(v, materialID, lod))
         IgnoreHit();
+    #endif
+    #if (DITHER_MODE == DITHER_MODE_PER_PIXEL_4X) || (DITHER_MODE == DITHER_MODE_PER_PIXEL_16X)
+    let material = gScene.materials.getMaterial(materialID);
+    float alpha = material.evalOpacity(gScene.materials, v, lod);
+    if (alpha < getPixelDitherThreshold(pixel))
+        IgnoreHit();
+    #endif
 }
 
 float2 calcMotionVector(uint2 pixel, uint2 frameDim, TriangleHit triangleHit)

@@ -35,6 +35,21 @@ using namespace Falcor;
 class DitherVBuffer : public RenderPass
 {
 public:
+    enum class DitherMode : uint32_t
+    {
+        Disabled,
+        PerPixel4x,
+        PerPixel16x,
+        PerJitter
+    };
+
+    FALCOR_ENUM_INFO(DitherMode, {
+        { DitherMode::Disabled, "Disabled" },
+        { DitherMode::PerPixel4x, "PerPixel4x" },
+        { DitherMode::PerPixel16x, "PerPixel16x" },
+        { DitherMode::PerJitter, "PerJitter" }
+    });
+
     FALCOR_PLUGIN_CLASS(DitherVBuffer, "DitherVBuffer", "VBuffer with Dithering options for transparency");
 
     static ref<DitherVBuffer> create(ref<Device> pDevice, const Properties& props) { return make_ref<DitherVBuffer>(pDevice, props); }
@@ -61,6 +76,7 @@ private:
     uint mFrameCount = 0;
 
     ref<HaltonSamplePattern> mpSamplePattern;
+    DitherMode mDitherMode = DitherMode::Disabled;
 };
 
-//FALCOR_ENUM_REGISTER(DitherVBuffer::SamplePattern);
+FALCOR_ENUM_REGISTER(DitherVBuffer::DitherMode);
