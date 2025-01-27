@@ -81,6 +81,7 @@ private:
 
     ref<HaltonSamplePattern> mpSamplePattern;
     DitherMode mDitherMode = DitherMode::PerJitter;
+    bool mUseAlphaTextureLOD = true; // use lod for alpha lookups
 };
 
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherMode);

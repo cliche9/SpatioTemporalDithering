@@ -12,6 +12,10 @@ import Utils.Color.ColorHelpers;
 
 #include "Dither.slangh"
 
+#ifndef ALPHA_TEXTURE_LOD
+#define ALPHA_TEXTURE_LOD 0
+#endif
+
 cbuffer PerFrame
 {
     uint gFrameCount;       // Frame count since scene was loaded.
@@ -95,15 +99,19 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     GeometryInstanceID instanceID = getGeometryInstanceID();
     VertexData v = getVertexData(instanceID, PrimitiveIndex(), attribs);
     uint materialID = gScene.getMaterialID(instanceID);
+    
     // lod
-    /*TriangleHit triangleHit;
+    #if ALPHA_TEXTURE_LOD != 0
+    TriangleHit triangleHit;
     triangleHit.instanceID = getGeometryInstanceID();
     triangleHit.primitiveIndex = PrimitiveIndex();
     triangleHit.barycentrics = attribs.barycentrics;
     float2 ddx, ddy;
     computeRayDifferentials(triangleHit, WorldRayDirection(), RayTCurrent(), gScene.camera, float2(frameDim), ddx, ddy);
-    let lod = ExplicitGradientTextureSampler(ddx, ddy);*/
+    let lod = ExplicitGradientTextureSampler(ddx, ddy);
+    #else
     let lod = ExplicitLodTextureSampler(0.0);
+    #endif
 
     #if DITHER_MODE == DITHER_MODE_DISABLED
     if (gScene.materials.alphaTest(v, materialID, lod))

@@ -91,6 +91,7 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["PerFrame"]["gSampleIndex"] = mpSamplePattern->getCurSample();
 
     mpProgram->addDefine("DITHER_MODE", std::to_string(uint32_t(mDitherMode)));
+    mpProgram->addDefine("ALPHA_TEXTURE_LOD", mUseAlphaTextureLOD ? "1" : "0");
 
     uint3 dispatch = uint3(1);
     dispatch.x = pVbuffer->getWidth();
@@ -107,6 +108,7 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
         createStratifiedBuffers();
     }
     widget.dropdown("Dither", mDitherMode);
+    widget.checkbox("Alpha Texture LOD", mUseAlphaTextureLOD);
 }
 
 void DitherVBuffer::setScene(RenderContext* pRenderContext, const ref<Scene>& pScene)
