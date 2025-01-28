@@ -129,6 +129,12 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     if(!isCovered(pixel, alpha, gSampleIndex, gSampleCount, gFrameCount, v.posW))
         IgnoreHit();
     #endif
+    #if DITHER_MODE == DITHER_MODE_RUSSIAN_ROULETTE
+    let material = gScene.materials.getMaterial(materialID);   
+    float alpha = material.evalOpacity(gScene.materials, v, lod);
+    if(!winRoulette(alpha, gFrameCount, v.posW))
+        IgnoreHit();
+    #endif
 }
 
 float2 calcMotionVector(uint2 pixel, uint2 frameDim, TriangleHit triangleHit)

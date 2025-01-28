@@ -40,14 +40,16 @@ public:
         Disabled,
         PerPixel4x,
         PerPixel16x,
-        PerJitter
+        PerJitter,
+        RussianRoulette
     };
 
     FALCOR_ENUM_INFO(DitherMode, {
         { DitherMode::Disabled, "Disabled" },
         { DitherMode::PerPixel4x, "PerPixel4x" },
         { DitherMode::PerPixel16x, "PerPixel16x" },
-        { DitherMode::PerJitter, "PerJitter" }
+        { DitherMode::PerJitter, "PerJitter" },
+        { DitherMode::RussianRoulette, "RussianRoulette" }
     });
 
     FALCOR_PLUGIN_CLASS(DitherVBuffer, "DitherVBuffer", "VBuffer with Dithering options for transparency");

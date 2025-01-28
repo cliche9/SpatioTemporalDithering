@@ -2,6 +2,7 @@
 #define DITHER_MODE_PER_PIXEL_4X 1
 #define DITHER_MODE_PER_PIXEL_16X 2
 #define DITHER_MODE_PER_JITTER 3
+#define DITHER_MODE_RUSSIAN_ROULETTE 4
 
 #ifndef DITHER_MODE
 #define DITHER_MODE DITHER_MODE_DISABLED
@@ -31,6 +32,13 @@ float hash3D(float3 v)
 float hash4D(float4 v)
 {
     return hash(float2(hash3D(v.xyz), v.w));
+}
+
+bool winRoulette(float alpha, uint frameIndex, float3 posW)
+{
+    float rng = hash4D(float4(posW, frameIndex));
+    if(rng > alpha) return false;
+    return true;
 }
 
 bool isCovered(uint2 pixel, float alpha, uint sampleIndex, uint sampleCount, uint frameIndex, float3 posW)
