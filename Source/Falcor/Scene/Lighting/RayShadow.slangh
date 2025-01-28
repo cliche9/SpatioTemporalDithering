@@ -25,6 +25,10 @@ SamplerState gSoftShadowSampler; // modified clamping mode to get softer borders
 #define RAY_CONE_SHADOW RAY_CONE_SHADOW_SATURATED
 #endif
 
+#ifndef RAY_CONE_SPREAD
+#define RAY_CONE_SPREAD 0.0
+#endif
+
 struct SoftExplicitRayConesLodTextureSampler : ITextureSampler
 {
     float rayconesLODWithoutTexDims;    ///< this is \Delta_t, which is texture independent, plus the rest of the terms, except the texture size, which is added below

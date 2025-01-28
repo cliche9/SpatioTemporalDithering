@@ -27,6 +27,7 @@
  **************************************************************************/
 #include "RayTransparency.h"
 #include "Scene/Lighting/LightSettings.h"
+#include "Scene/Lighting/ShadowSettings.h"
 
 namespace
 {
@@ -87,9 +88,11 @@ void RayTransparency::execute(RenderContext* pRenderContext, const RenderData& r
     var["gDepth"] = pDepth;
     var["gTransparent"] = pTransparent;
     LightSettings::get().updateShaderVar(var);
+    ShadowSettings::get().updateShaderVar(mpDevice, var);
 
     var["PerFrame"]["gFrameCount"] = mFrameCount++;
     mpProgram->addDefine("ALPHA_TEXTURE_LOD", mUseAlphaTextureLOD ? "1" : "0");
+    mpProgram->addDefines(ShadowSettings::get().getShaderDefines(*mpScene, renderData.getDefaultTextureDims()));
 
     uint3 dispatch = uint3(1);
     dispatch.x = pVbuffer->getWidth();
@@ -106,7 +109,8 @@ void RayTransparency::renderUI(Gui::Widgets& widget)
     }
     widget.checkbox("Alpha Texture LOD", mUseAlphaTextureLOD);
 
-    LightSettings::get().renderUI(widget);
+    //LightSettings::get().renderUI(widget);
+    //ShadowSettings::get().renderUI(widget);
 }
 
 void RayTransparency::setScene(RenderContext* pRenderContext, const ref<Scene>& pScene)

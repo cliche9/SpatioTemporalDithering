@@ -4,7 +4,7 @@ Texture2DArray<float> visibilityBuffer;
 Texture2D<PackedHitInfo> vbuffer;
 Texture2D<float4> rayDir;
 
-float computeShadowImpl(uint2 pixel, uint lightIndex, AnalyticLightSample ls)
+float computeShadowImpl(uint2 pixel, uint lightIndex, float3 posW, float3 normalW)
 {
     uint visWidth, visHeight, visSlices;
     visibilityBuffer.GetDimensions(visWidth, visHeight, visSlices);

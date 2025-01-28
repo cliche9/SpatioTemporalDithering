@@ -1,6 +1,7 @@
 #include "Scene/SceneDefines.slangh"
 #include "Utils/Math/MathConstants.slangh"
 #include "Scene/Lighting/Lighting.slangh"
+#include "Scene/Lighting/RayShadow.slangh"
 
 import Scene.Raytracing;
 import Scene.Intersection;
@@ -95,9 +96,10 @@ float2 calcMotionVector(uint2 pixel, uint2 frameDim, TriangleHit triangleHit)
     return calcMotionVector(pixelPos, prevPosH, frameDim) + float2(gScene.camera.data.jitterX, -gScene.camera.data.jitterY); // Remove camera jitter from motion vector
 }
 
-float computeShadowImpl(uint2 pixel, uint lightIndex, AnalyticLightSample ls)
+float computeShadowImpl(uint2 pixel, uint lightIndex, float3 posW, float3 normalW)
 {
-    return 1.0;
+    // posW + normal?
+    return traceShadowRay(posW, normalW, lightIndex);
 }
 
 [shader("closesthit")]

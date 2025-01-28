@@ -65,7 +65,7 @@ void computeRayDifferentials(const TriangleHit hit, float3 rayDir, float hitT, c
 }
 #endif
 
-float computeShadowImpl(uint2 pixel, uint lightIndex, AnalyticLightSample ls);
+float computeShadowImpl(uint2 pixel, uint lightIndex, float3 posW, float3 normalW);
 
 float4 shadeVBuffer(TriangleHit triangleHit, uint2 pixel, uint2 frameDim, float3 viewDir)
 {
@@ -111,7 +111,7 @@ float4 shadeVBuffer(TriangleHit triangleHit, uint2 pixel, uint2 frameDim, float3
     {
         AnalyticLightSample ls;
         evalLightApproximate(sd.posW, gScene.getLight(i), ls);
-        float shadow = computeShadowImpl(pixel, i, ls);        
+        float shadow = computeShadowImpl(pixel, i, v.posW, v.normalW);        
         color += shadow * mi.eval(sd, ls.dir, sg) * ls.Li * gLightIntensity;  
     }
     return float4(color, 1.f);
