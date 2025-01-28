@@ -4,16 +4,10 @@
 
 using namespace Falcor;
 
-#ifdef SETTINGS_EXPORTS
-#define SETTINGS_API __declspec(dllexport)
-#else
-#define SETTINGS_API __declspec(dllimport)
-#endif
-
-class SETTINGS_API LightSettings
+class FALCOR_API LightSettings
 {
 public:
-    static LightSettings get();
+    static LightSettings& get();
 
     void loadFromProperties(const Properties& props);
     Properties getProperties() const;

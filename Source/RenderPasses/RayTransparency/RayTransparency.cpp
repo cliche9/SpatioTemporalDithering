@@ -26,12 +26,16 @@
  # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************/
 #include "RayTransparency.h"
+#include "Scene/Lighting/LightSettings.h"
 
 namespace
 {
-    
+    const std::string kVbuffer = "vbuffer";
+    const std::string kMotion = "mvec";
+    const std::string kDepth = "depth";
+    const std::string kTransparentColor = "transparent";
 
-    const uint32_t kMaxPayloadSizeBytes = 4;
+    const uint32_t kMaxPayloadSizeBytes = 5*4;
     const std::string kProgramRaytraceFile = "RenderPasses/RayTransparency/Transparency.rt.slang";
 }
 
@@ -44,6 +48,7 @@ RayTransparency::RayTransparency(ref<Device> pDevice, const Properties& props)
     : RenderPass(pDevice)
 {
     mpSampleGenerator = SampleGenerator::create(mpDevice, SAMPLE_GENERATOR_UNIFORM);
+    mpSamplePattern = HaltonSamplePattern::create(16);
 }
 
 Properties RayTransparency::getProperties() const
@@ -55,26 +60,85 @@ RenderPassReflection RayTransparency::reflect(const CompileData& compileData)
 {
     // Define the required resources here
     RenderPassReflection reflector;
-    
+    reflector.addOutput(kVbuffer, "V-buffer").format(HitInfo::kDefaultFormat);
+    reflector.addOutput(kMotion, "Motion vector").format(ResourceFormat::RG32Float);
+    reflector.addOutput(kDepth, "Normalized Depth (1=far, 0=origin)").format(ResourceFormat::R32Float);
+    reflector.addOutput(kTransparentColor, "Transparent Color (RGB+visibility)").format(ResourceFormat::RGBA16Float);
     return reflector;
 }
 
 void RayTransparency::execute(RenderContext* pRenderContext, const RenderData& renderData)
 {
-    // renderData holds the requested resources
-    // auto& pTexture = renderData.getTexture("src");
+    if (!mpScene) return;
+    assert(mpProgram);
+    assert(mpVars);
+
+    auto pVbuffer = renderData.getTexture(kVbuffer);
+    auto pMotion = renderData.getTexture(kMotion);
+    auto pDepth = renderData.getTexture(kDepth);
+    auto pTransparent = renderData.getTexture(kTransparentColor);
+
+    uint2 frameDim = uint2(pVbuffer->getWidth(), pVbuffer->getHeight());
+    mpScene->getCamera()->setPatternGenerator(mpSamplePattern, 1.0f / float2(frameDim));
+
+    auto var = mpVars->getRootVar();
+    var["gVBuffer"] = pVbuffer;
+    var["gMotion"] = pMotion;
+    var["gDepth"] = pDepth;
+    var["gTransparent"] = pTransparent;
+
+    var["PerFrame"]["gFrameCount"] = mFrameCount++;
+    mpProgram->addDefine("ALPHA_TEXTURE_LOD", mUseAlphaTextureLOD ? "1" : "0");
+
+    uint3 dispatch = uint3(1);
+    dispatch.x = pVbuffer->getWidth();
+    dispatch.y = pVbuffer->getHeight();
+    mpScene->raytrace(pRenderContext, mpProgram.get(), mpVars, dispatch);
 }
 
 void RayTransparency::renderUI(Gui::Widgets& widget)
 {
+    auto sampleCount = mpSamplePattern->getSampleCount();
+    if (widget.var("Sample Count", sampleCount, 1u, 16u)) // sizes > 16 generate too much possible combinations for the dither pattern (per jitter)
+    {
+        mpSamplePattern->setSampleCount(sampleCount);
+    }
+    widget.checkbox("Alpha Texture LOD", mUseAlphaTextureLOD);
+
+    LightSettings::get().renderUI(widget);
 }
 
 void RayTransparency::setScene(RenderContext* pRenderContext, const ref<Scene>& pScene)
 {
-    
+    mpScene = pScene;
+    setupProgram();
 }
 
 void RayTransparency::setupProgram()
 {
+    if (!mpScene) return;
 
+    DefineList defines;
+    defines.add(mpScene->getSceneDefines());
+    defines.add(mpSampleGenerator->getDefines());
+
+    RtProgram::Desc desc;
+    desc.addShaderModules(mpScene->getShaderModules());
+    desc.addShaderLibrary(kProgramRaytraceFile);
+    desc.addTypeConformances(mpScene->getTypeConformances());
+    desc.setMaxPayloadSize(kMaxPayloadSizeBytes);
+    desc.setMaxAttributeSize(mpScene->getRaytracingMaxAttributeSize());
+    desc.setMaxTraceRecursionDepth(1);
+
+    ref<RtBindingTable> sbt = RtBindingTable::create(1, 1, mpScene->getGeometryCount());
+    sbt->setRayGen(desc.addRayGen("rayGen"));
+    sbt->setMiss(0, desc.addMiss("miss"));
+    sbt->setHitGroup(0, mpScene->getGeometryIDs(Scene::GeometryType::TriangleMesh), desc.addHitGroup("closestHit", "anyHit"));
+
+    mpProgram = RtProgram::create(mpDevice, desc, defines);
+    mpVars = RtProgramVars::create(mpDevice, mpProgram, sbt);
+
+    // Bind static resources.
+    ShaderVar var = mpVars->getRootVar();
+    mpSampleGenerator->setShaderData(var);
 }

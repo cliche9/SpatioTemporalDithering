@@ -10,8 +10,6 @@ import Utils.Math.FormatConversion;
 import Rendering.Materials.IsotropicGGX;
 import Utils.Color.ColorHelpers;
 
-#include "Dither.slangh"
-
 #ifndef ALPHA_TEXTURE_LOD
 #define ALPHA_TEXTURE_LOD 0
 #endif
@@ -19,16 +17,16 @@ import Utils.Color.ColorHelpers;
 cbuffer PerFrame
 {
     uint gFrameCount;       // Frame count since scene was loaded.
-    uint gSampleCount;      // Sample count per pixel.
-    uint gSampleIndex;      // looped jitter sequence sample index
 }
 
 RWTexture2D<PackedHitInfo> gVBuffer;
 RWTexture2D<float2> gMotion;
 RWTexture2D<float> gDepth; // normalized depth for DLSS (0-1 range)
+RWTexture2D<float4> gTransparent; // rgba transparent color
 
 struct RayData
 {
+    float4 color;
     float RayTMax;
 };
 
@@ -99,7 +97,7 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     GeometryInstanceID instanceID = getGeometryInstanceID();
     VertexData v = getVertexData(instanceID, PrimitiveIndex(), attribs);
     uint materialID = gScene.getMaterialID(instanceID);
-    //if(materialID < 111) IgnoreHit();
+
     // lod
     #if ALPHA_TEXTURE_LOD != 0
     TriangleHit triangleHit;
@@ -113,22 +111,9 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     let lod = ExplicitLodTextureSampler(0.0);
     #endif
 
-    #if DITHER_MODE == DITHER_MODE_DISABLED
-    if (gScene.materials.alphaTest(v, materialID, lod))
-        IgnoreHit();
-    #endif
-    #if (DITHER_MODE == DITHER_MODE_PER_PIXEL_4X) || (DITHER_MODE == DITHER_MODE_PER_PIXEL_16X)
-    let material = gScene.materials.getMaterial(materialID);
-    float alpha = material.evalOpacity(gScene.materials, v, lod);
-    if (alpha < getPixelDitherThreshold(pixel))
-        IgnoreHit();
-    #endif
-    #if DITHER_MODE == DITHER_MODE_PER_JITTER
     let material = gScene.materials.getMaterial(materialID);   
     float alpha = material.evalOpacity(gScene.materials, v, lod);
-    if(!isCovered(pixel, alpha, gSampleIndex, gSampleCount, gFrameCount, v.posW))
-        IgnoreHit();
-    #endif
+    if(alpha < 0.01) IgnoreHit(); // no hit
 }
 
 float2 calcMotionVector(uint2 pixel, uint2 frameDim, TriangleHit triangleHit)

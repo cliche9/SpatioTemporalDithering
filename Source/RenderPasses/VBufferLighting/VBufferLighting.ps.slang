@@ -1,4 +1,4 @@
-#include "Lighting.slangh"
+#include "Scene/Lighting/Lighting.slangh"
 
 Texture2DArray<float> visibilityBuffer;
 Texture2D<PackedHitInfo> vbuffer;

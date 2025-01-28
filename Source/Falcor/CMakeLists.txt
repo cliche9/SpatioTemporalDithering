@@ -343,6 +343,9 @@ target_sources(Falcor PRIVATE
     Scene/TriangleMesh.h
     Scene/VertexAttrib.slangh
 
+    Scene/Lighting/LightSettings.h
+    Scene/Lighting/LightSettings.cpp
+
     Scene/Animation/Animatable.cpp
     Scene/Animation/Animatable.h
     Scene/Animation/AnimatedVertexCache.cpp

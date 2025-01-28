@@ -1,4 +1,3 @@
-#define SETTINGS_EXPORTS
 #include "LightSettings.h"
 
 namespace
@@ -9,7 +8,7 @@ namespace
     const std::string kEnvMapMirror = "envMapMirror";
 }
 
-LightSettings FALCOR_API_EXPORT LightSettings::get()
+LightSettings FALCOR_API_EXPORT &LightSettings::get()
 {
     static LightSettings instance;
     return instance;

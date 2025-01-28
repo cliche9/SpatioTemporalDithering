@@ -26,9 +26,7 @@
  # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************/
 #include "VBufferLighting.h"
-
-#define SETTINGS_EXPORTS
-#include "LightSettings.h"
+#include "Scene/Lighting/LightSettings.h"
 
 namespace
 {

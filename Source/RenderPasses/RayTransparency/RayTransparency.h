@@ -28,6 +28,7 @@
 #pragma once
 #include "Falcor.h"
 #include "RenderGraph/RenderPass.h"
+#include "Utils/SampleGenerators/HaltonSamplePattern.h"
 
 using namespace Falcor;
 
@@ -57,4 +58,8 @@ private:
     ref<RtProgram> mpProgram;
     ref<RtProgramVars> mpVars;
     ref<SampleGenerator> mpSampleGenerator;
+    uint mFrameCount = 0;
+    bool mUseAlphaTextureLOD = true; // use lod for alpha lookups
+
+    ref<HaltonSamplePattern> mpSamplePattern;
 };
