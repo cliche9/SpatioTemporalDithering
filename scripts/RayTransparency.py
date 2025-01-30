@@ -11,7 +11,7 @@ def render_graph_RayTransparency():
     g.create_pass('RayShadow', 'RayShadow', {})
     g.create_pass('RayTransparency', 'RayTransparency', {})
     g.create_pass('ImageEquation0', 'ImageEquation', {'formula': 'float4(I0[xy].rgb+I0[xy].a*I1[xy].rgb, 1.0)', 'format': 'RGBA32Float'})
-    g.create_pass('ToneMapperTAA', 'ToneMapper', {'outputSize': 'Default', 'useSceneMetadata': True, 'exposureCompensation': 0.0, 'autoExposure': False, 'filmSpeed': 100.0, 'whiteBalance': False, 'whitePoint': 6500.0, 'operator': 'Linear', 'clamp': False, 'whiteMaxLuminance': 1.0, 'whiteScale': 11.199999809265137, 'fNumber': 1.0, 'shutter': 1.0, 'exposureMode': 'AperturePriority'})
+    g.create_pass('OutputSwitch', 'Switch', {'count': 2, 'selected': 0, 'i0': 'DLSS', 'i1': 'TAA'})
     g.add_edge('UnpackVBuffer.posW', 'RayShadow.posW')
     g.add_edge('UnpackVBuffer.normalW', 'RayShadow.normalW')
     g.add_edge('RayShadow.visibility', 'VBufferLighting.visibilityBuffer')
@@ -23,11 +23,11 @@ def render_graph_RayTransparency():
     g.add_edge('RayTransparency.transparent', 'ImageEquation0.I0')
     g.add_edge('VBufferLighting.color', 'ImageEquation0.I1')
     g.add_edge('ImageEquation0.out', 'DLSSPass.color')
-    g.add_edge('DLSSPass.output', 'ToneMapper.src')
     g.add_edge('ImageEquation0.out', 'TAA.colorIn')
-    g.add_edge('TAA.colorOut', 'ToneMapperTAA.src')
+    g.add_edge('DLSSPass.output', 'OutputSwitch.i0')
+    g.add_edge('TAA.colorOut', 'OutputSwitch.i1')
+    g.add_edge('OutputSwitch.out', 'ToneMapper.src')
     g.mark_output('ToneMapper.dst')
-    g.mark_output('ToneMapperTAA.dst')
     return g
 
 RayTransparency = render_graph_RayTransparency()

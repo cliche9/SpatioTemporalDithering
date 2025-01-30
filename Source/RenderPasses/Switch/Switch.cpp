@@ -89,7 +89,7 @@ RenderPassReflection Switch::reflect(const CompileData& compileData)
     reflector.addOutput(kOutput, "selected output");
 
     auto edge = compileData.connectedResources.getField(getInputName(mSelectedIndex));
-    if(edge)
+    /*if(edge)
     {
         reflector.addOutput(kOutput, edge->getName())
             .resourceType(edge->getType(), edge->getWidth(), edge->getHeight(), edge->getDepth(), edge->getSampleCount(), edge->getMipCount(), edge->getArraySize())
@@ -97,6 +97,10 @@ RenderPassReflection Switch::reflect(const CompileData& compileData)
             .format(edge->getFormat());
         mReady = true;
     }
+    else
+    {*/
+        reflector.addOutput(kOutput, "output").format(ResourceFormat::RGBA32Float);
+    //}
 
     return reflector;
 }
@@ -115,7 +119,7 @@ void Switch::execute(RenderContext* pRenderContext, const RenderData& renderData
     auto pOutput = renderData[kOutput]->asTexture();
 
     // check if the format still matches
-    if (pInput->getFormat() != pOutput->getFormat() ||
+    /*if (pInput->getFormat() != pOutput->getFormat() ||
         pInput->getBindFlags() != pOutput->getBindFlags() ||
         pInput->getWidth() != pOutput->getWidth() ||
         pInput->getHeight() != pOutput->getHeight() ||
@@ -127,7 +131,7 @@ void Switch::execute(RenderContext* pRenderContext, const RenderData& renderData
         logWarning("Switch::execute() - input and output formats don't match. Recompiling");
         requestRecompile();
         return;
-    }
+    }*/
 
     for(uint32_t mip = 0; mip < pInput->getMipCount(); ++mip)
     {
@@ -152,7 +156,7 @@ void Switch::renderUI(Gui::Widgets& widget)
 
     if (widget.dropdown("Switch", dropdowns, mSelectedIndex))
     {
-        //requestRecompile(); // try without recompile, recompile will happen in execute if formats were incompatible
+        //requestRecompile(); 
     }
 
     if (auto group = widget.group("Configure", false))
