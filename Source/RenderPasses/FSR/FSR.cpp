@@ -90,10 +90,10 @@ void FSR::compile(RenderContext* pRenderContext, const CompileData& compileData)
     contextDesc.flags = FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE; // | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
     contextDesc.maxRenderSize = { compileData.defaultTexDims.x, compileData.defaultTexDims.y };
     contextDesc.maxUpscaleSize = { compileData.defaultTexDims.x, compileData.defaultTexDims.y };
-//#if defined(_DEBUG)
+#if defined(_DEBUG)
     contextDesc.flags |= FFX_UPSCALE_ENABLE_DEBUG_CHECKING;
     contextDesc.fpMessage = ffxApiMessageFunc;
-//#endif  
+#endif  
 
     auto ret = ffx::CreateContext(mContext, nullptr, contextDesc, backendDesc);
     if(ret != ffx::ReturnCode::Ok)
@@ -151,8 +151,8 @@ void FSR::execute(RenderContext* pRenderContext, const RenderData& renderData)
     dispatchUpscale.reactive = ffxGetResourceApi(pRenderContext, nullptr);;
     dispatchUpscale.transparencyAndComposition = ffxGetResourceApi(pRenderContext, nullptr);
     float2 jitterOffset = float2(pCamera->getJitterX(), -pCamera->getJitterY()) * float2(pColorIn->getWidth(), pColorIn->getHeight());
-    dispatchUpscale.jitterOffset.x = 0.0f; //-pCamera->getJitterX(); // TODO jitter ([-0.5, 0.5] range?)
-    dispatchUpscale.jitterOffset.y = 0.0f; //-pCamera->getJitterY();
+    dispatchUpscale.jitterOffset.x = jitterOffset.x;
+    dispatchUpscale.jitterOffset.y = jitterOffset.y;
     dispatchUpscale.motionVectorScale.x = float(pColorIn->getWidth());
     dispatchUpscale.motionVectorScale.y = float(pColorIn->getHeight());
     dispatchUpscale.reset = mReset;
@@ -187,7 +187,6 @@ void FSR::renderUI(Gui::Widgets& widget)
     if (!mEnabled) return;
 
     widget.slider("Sharpness", mSharpness, 0.0f, 1.0f);
-
 
     if(widget.button("Reset"))
     {
