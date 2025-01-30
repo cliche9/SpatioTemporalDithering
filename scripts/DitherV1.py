@@ -16,7 +16,6 @@ def render_graph_Dither():
     g.add_edge('DitherVBuffer.vbuffer', 'VBufferLighting.vbuffer')
     g.add_edge('DitherVBuffer.mvec', 'TAA.motionVecs')
     g.add_edge('DitherVBuffer.mvec', 'DLSSPass.mvec')
-    g.add_edge('DitherVBuffer.depth', 'DLSSPass.depth')
     g.add_edge('DitherVBuffer.vbuffer', 'UnpackVBuffer.vbuffer')
     g.add_edge('UnpackVBuffer.posW', 'RayShadow.posW')
     g.add_edge('UnpackVBuffer.normalW', 'RayShadow.normalW')
@@ -26,12 +25,13 @@ def render_graph_Dither():
     g.add_edge('VBufferLighting.color', 'AccumulatePass.input')
     g.add_edge('VBufferLighting.color', 'FSR.color')
     g.add_edge('DitherVBuffer.mvec', 'FSR.mvec')
-    g.add_edge('DitherVBuffer.depth', 'FSR.depth')
     g.add_edge('DLSSPass.output', 'OutputSwitch.i0')
     g.add_edge('TAA.colorOut', 'OutputSwitch.i1')
     g.add_edge('OutputSwitch.out', 'ToneMapper.src')
     g.add_edge('FSR.output', 'OutputSwitch.i3')
     g.add_edge('AccumulatePass.output', 'OutputSwitch.i2')
+    g.add_edge('UnpackVBuffer.rasterZ', 'DLSSPass.depth')
+    g.add_edge('UnpackVBuffer.rasterZ', 'FSR.depth')
     g.mark_output('ToneMapper.dst')
     return g
 

@@ -19,7 +19,6 @@ def render_graph_RayTransparency():
     g.add_edge('RayTransparency.vbuffer', 'VBufferLighting.vbuffer')
     g.add_edge('RayTransparency.mvec', 'TAA.motionVecs')
     g.add_edge('RayTransparency.mvec', 'DLSSPass.mvec')
-    g.add_edge('RayTransparency.depth', 'DLSSPass.depth')
     g.add_edge('RayTransparency.transparent', 'ImageEquation0.I0')
     g.add_edge('VBufferLighting.color', 'ImageEquation0.I1')
     g.add_edge('ImageEquation0.out', 'DLSSPass.color')
@@ -27,6 +26,7 @@ def render_graph_RayTransparency():
     g.add_edge('DLSSPass.output', 'OutputSwitch.i0')
     g.add_edge('TAA.colorOut', 'OutputSwitch.i1')
     g.add_edge('OutputSwitch.out', 'ToneMapper.src')
+    g.add_edge('UnpackVBuffer.rasterZ', 'DLSSPass.depth')
     g.mark_output('ToneMapper.dst')
     return g
 

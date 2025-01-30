@@ -32,7 +32,6 @@ namespace
 {
     const std::string kVbuffer = "vbuffer";
     const std::string kMotion = "mvec";
-    const std::string kDepth = "depth";
 
     const uint32_t kMaxPayloadSizeBytes = 4; 
     const std::string kProgramRaytraceFile = "RenderPasses/DitherVBuffer/DitherVBuffer.rt.slang";
@@ -62,7 +61,6 @@ RenderPassReflection DitherVBuffer::reflect(const CompileData& compileData)
     RenderPassReflection reflector;
     reflector.addOutput(kVbuffer, "V-buffer").format(HitInfo::kDefaultFormat);
     reflector.addOutput(kMotion, "Motion vector").format(ResourceFormat::RG32Float);
-    reflector.addOutput(kDepth, "Normalized Depth (1=far, 0=origin)").format(ResourceFormat::R32Float);
     return reflector;
 }
 
@@ -74,7 +72,6 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
 
     auto pVbuffer = renderData.getTexture(kVbuffer);
     auto pMotion = renderData.getTexture(kMotion);
-    auto pDepth = renderData.getTexture(kDepth);
 
     uint2 frameDim = uint2(pVbuffer->getWidth(), pVbuffer->getHeight());
     mpScene->getCamera()->setPatternGenerator(mpSamplePattern, 1.0f / float2(frameDim));
@@ -82,7 +79,6 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     auto var = mpVars->getRootVar();
     var["gVBuffer"] = pVbuffer;
     var["gMotion"] = pMotion;
-    var["gDepth"] = pDepth;
     var["gStratifiedIndices"] = mpStratifiedIndices;
     var["gStratifiedLookUpTable"] = mpStratifiedLookUpBuffer;
 

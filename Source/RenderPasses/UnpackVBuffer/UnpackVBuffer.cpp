@@ -38,7 +38,8 @@ namespace
         { "posW","gPosW","World Space Position",true /* optional */, ResourceFormat::RGBA32Float},
         { "normalW","gNormalW","World Space Normal",true /* optional */, ResourceFormat::RGBA32Float},
         { "faceNormalW","gFaceNormalW","World Space Face Normal",true /* optional */, ResourceFormat::RGBA32Float},
-
+        {"rasterZ", "gRasterZ", "Non-linear z values as in rasterization", true, ResourceFormat::R32Float},
+        {"linearZ", "gLinearZ", "Linear z values from camera space (positive)", true, ResourceFormat::R32Float}
     };
 
     const std::string kProgramComputeFile = "RenderPasses/UnpackVBuffer/Unpack.cs.slang";

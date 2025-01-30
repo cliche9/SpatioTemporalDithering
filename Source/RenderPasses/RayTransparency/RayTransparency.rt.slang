@@ -25,7 +25,6 @@ cbuffer PerFrame
 
 RWTexture2D<PackedHitInfo> gVBuffer;
 RWTexture2D<float2> gMotion;
-RWTexture2D<float> gDepth; // normalized depth for DLSS (0-1 range)
 RWTexture2D<float4> gTransparent; // rgba transparent color
 
 struct RayData
@@ -55,7 +54,6 @@ void miss(inout RayData rayData : SV_RayPayload)
     float3 prevEnvMapDir = mul(gScene.camera.data.prevViewMat, float4(rayDirNoJitter, 0.0)).xyz;
     float2 prevUV = ViewSpaceToUV(prevEnvMapDir);
     gMotion[pixel] = prevUV - (float2(pixel)+0.5) / float2(frameDim);
-    gDepth[pixel] = 1.0;
 }
 
 //Use anyhit for alpha test if activated
@@ -136,7 +134,6 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
         // leave rayT as is, to stop ray
         gVBuffer[pixel] = HitInfo(triangleHit).getData();
         gMotion[pixel] = calcMotionVector(pixel, frameDim, triangleHit);
-        gDepth[pixel] = RayTCurrent() / rayData.rayT; // 0-1 range
     }
     else // full shading
     {

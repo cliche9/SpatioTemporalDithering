@@ -33,7 +33,6 @@ namespace
 {
     const std::string kVbuffer = "vbuffer";
     const std::string kMotion = "mvec";
-    const std::string kDepth = "depth";
     const std::string kTransparentColor = "transparent";
 
     const uint32_t kMaxPayloadSizeBytes = 5*4;
@@ -63,7 +62,6 @@ RenderPassReflection RayTransparency::reflect(const CompileData& compileData)
     RenderPassReflection reflector;
     reflector.addOutput(kVbuffer, "V-buffer").format(HitInfo::kDefaultFormat);
     reflector.addOutput(kMotion, "Motion vector").format(ResourceFormat::RG32Float);
-    reflector.addOutput(kDepth, "Normalized Depth (1=far, 0=origin)").format(ResourceFormat::R32Float);
     reflector.addOutput(kTransparentColor, "Transparent Color (RGB+visibility)").format(ResourceFormat::RGBA16Float);
     return reflector;
 }
@@ -76,7 +74,6 @@ void RayTransparency::execute(RenderContext* pRenderContext, const RenderData& r
 
     auto pVbuffer = renderData.getTexture(kVbuffer);
     auto pMotion = renderData.getTexture(kMotion);
-    auto pDepth = renderData.getTexture(kDepth);
     auto pTransparent = renderData.getTexture(kTransparentColor);
 
     uint2 frameDim = uint2(pVbuffer->getWidth(), pVbuffer->getHeight());
@@ -85,7 +82,6 @@ void RayTransparency::execute(RenderContext* pRenderContext, const RenderData& r
     auto var = mpVars->getRootVar();
     var["gVBuffer"] = pVbuffer;
     var["gMotion"] = pMotion;
-    var["gDepth"] = pDepth;
     var["gTransparent"] = pTransparent;
     LightSettings::get().updateShaderVar(var);
     ShadowSettings::get().updateShaderVar(mpDevice, var);
