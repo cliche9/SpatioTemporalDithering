@@ -36,10 +36,14 @@ namespace
     const ChannelList kVBufferExtraChannels =
     {
         { "posW","gPosW","World Space Position",true /* optional */, ResourceFormat::RGBA32Float},
-        { "normalW","gNormalW","World Space Normal",true /* optional */, ResourceFormat::RGBA32Float},
-        { "faceNormalW","gFaceNormalW","World Space Face Normal",true /* optional */, ResourceFormat::RGBA32Float},
+        { "normalW","gNormalW","World Space Normal",true /* optional */, ResourceFormat::RGBA16Float},
+        {"normalV", "gNormalV", "View Space Normal", true, ResourceFormat::RGBA16Float},
+        { "faceNormalW","gFaceNormalW","World Space Face Normal",true /* optional */, ResourceFormat::RGBA16Float},
         {"rasterZ", "gRasterZ", "Non-linear z values as in rasterization", true, ResourceFormat::R32Float},
-        {"linearZ", "gLinearZ", "Linear z values from camera space (positive)", true, ResourceFormat::R32Float}
+        {"linearZ", "gLinearZ", "Linear z values from camera space (positive)", true, ResourceFormat::R32Float},
+        {"roughness", "gRoughness", "0-1 material roughness", true, ResourceFormat::R8Unorm},
+        {"diffuse", "gDiffuse", "diffuse material property", true, ResourceFormat::RGBA8Unorm},
+        {"specular", "gSpecular", "specular material property", true, ResourceFormat::RGBA8Unorm}
     };
 
     const std::string kProgramComputeFile = "RenderPasses/UnpackVBuffer/Unpack.cs.slang";
