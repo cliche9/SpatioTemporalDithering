@@ -28,6 +28,7 @@
 #pragma once
 #include "Falcor.h"
 #include "RenderGraph/RenderPass.h"
+#include "NGXWrapper.h"
 
 using namespace Falcor;
 
@@ -42,7 +43,7 @@ public:
 
     virtual Properties getProperties() const override;
     virtual RenderPassReflection reflect(const CompileData& compileData) override;
-    virtual void compile(RenderContext* pRenderContext, const CompileData& compileData) override {}
+    virtual void compile(RenderContext* pRenderContext, const CompileData& compileData) override;
     virtual void execute(RenderContext* pRenderContext, const RenderData& renderData) override;
     virtual void renderUI(Gui::Widgets& widget) override;
     virtual void setScene(RenderContext* pRenderContext, const ref<Scene>& pScene) override { mpScene = pScene; }
@@ -52,4 +53,8 @@ public:
 private:
     bool mEnabled = true;
     ref<Scene> mpScene;
+
+    std::unique_ptr<NGXWrapper> mpNGXWrapper;
+    bool mRecreate = false;
+    bool mReset = false; // reset accumulation
 };

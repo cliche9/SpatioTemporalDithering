@@ -72,8 +72,13 @@ RenderPassReflection RayReconstructionPass::reflect(const CompileData& compileDa
     reflector.addInput(kSpecHitDist, "(Optional) World Space distance between the Specular Ray Origin and Hit Point (R)").bindFlags(ResourceBindFlags::ShaderResource).flags(RenderPassReflection::Field::Flags::Optional);
     reflector.addInput(kTranparent, "(Optional) Transparent effects, that are excluded from the input color (RGBA). RGB must be premultiplied with Alpha, Alpha channel is the blending factor.").bindFlags(ResourceBindFlags::ShaderResource).flags(RenderPassReflection::Field::Flags::Optional);
 
-    reflector.addOutput(kOutput, "denoised anti-aliased color").format(ResourceFormat::RGBA32Float).bindFlags(ResourceBindFlags::RenderTarget);
+    reflector.addOutput(kOutput, "denoised anti-aliased color").format(ResourceFormat::RGBA32Float).bindFlags(ResourceBindFlags::AllColorViews);
     return reflector;
+}
+
+void RayReconstructionPass::compile(RenderContext* pRenderContext, const CompileData& compileData)
+{
+    mRecreate = true; // dimensions changed?
 }
 
 void RayReconstructionPass::execute(RenderContext* pRenderContext, const RenderData& renderData)
@@ -96,6 +101,35 @@ void RayReconstructionPass::execute(RenderContext* pRenderContext, const RenderD
         pRenderContext->blit(pColorIn->getSRV(), pOut->getRTV());
         return;
     }
+
+    if (!mpNGXWrapper)
+        mpNGXWrapper.reset(new NGXWrapper(mpDevice, getRuntimeDirectory(), getRuntimeDirectory()));
+
+    // initialize DLSSD
+    if(!mpNGXWrapper->isDLSSDInitialized() || mRecreate)
+    {
+        mpNGXWrapper->releaseDLSSD();
+        mpNGXWrapper->initializeDLSSD(
+            pRenderContext,
+            uint2(pOut->getWidth(), pOut->getHeight()),
+            true, false, false
+        );
+        mRecreate = false;
+    }
+
+    const auto& camera = mpScene->getCamera();
+    float2 jitterOffset = float2(camera->getJitterX(), -camera->getJitterY()) * float2(pColorIn->getWidth(), pColorIn->getHeight());
+    //float2 motionVectorScale = float2(1.f, 1.f);
+    float2 motionVectorScale = float2(pColorIn->getWidth(), pColorIn->getHeight());
+
+    mpNGXWrapper->evaluateDLSSD(
+        pRenderContext,
+        pDiffAlbedo.get(), pSpecAlbedo.get(), pNormal.get(), pRoughness.get(),
+        pColorIn.get(), pMotion.get(), pSpecMotion.get(), pDepth.get(), pSpecHitDist.get(),
+        pTransparent.get(), pOut.get(), mReset, jitterOffset, motionVectorScale,
+        camera->getViewMatrix(), camera->getProjMatrix()
+    );
+    mReset = false;
 }
 
 void RayReconstructionPass::renderUI(Gui::Widgets& widget)
@@ -103,5 +137,8 @@ void RayReconstructionPass::renderUI(Gui::Widgets& widget)
     widget.checkbox("Enabled", mEnabled);
     if (!mEnabled) return;
 
-
+    if(widget.button("Reset"))
+    {
+        mReset = true;
+    }
 }
