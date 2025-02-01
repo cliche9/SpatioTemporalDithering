@@ -115,8 +115,8 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     #endif
 
     #if TRANSPARENCY_WHITELIST != 0
-    uint isTransparent = gTransparencyWhitelist[materialID];
-    if(!isTransparent)
+    uint isTransparent = (gTransparencyWhitelist[materialID / 32u] & (1u << (materialID % 32u)));
+    if(isTransparent == 0u)
     {
         // use default alpha test if not marked as transparent
         if (gScene.materials.alphaTest(v, materialID, lod))

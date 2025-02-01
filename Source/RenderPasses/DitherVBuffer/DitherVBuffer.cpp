@@ -208,15 +208,29 @@ bool DitherVBuffer::updateWhitelistBuffer()
     if (!mpScene) return true;
     bool any = false;
 
-    std::vector<uint32_t> whitelist;
-    for(uint mat = 0; mat < mpScene->getMaterialCount(); ++mat)
+    // Calculate the number of uint32_t elements needed to store all bits
+    uint32_t materialCount = mpScene->getMaterialCount();
+    uint32_t uintCount = (materialCount + 31) / 32; // Round up to the nearest uint32_t
+
+    std::vector<uint32_t> whitelist(uintCount, 0); // Initialize all bits to 0
+
+    // Pack the boolean values into bits
+    for (uint32_t mat = 0; mat < materialCount; ++mat)
     {
         std::string name = mpScene->getMaterial(MaterialID(mat))->getName();
         bool isTransparent = mTransparencyWhitelist.find(name) != mTransparencyWhitelist.end();
-        whitelist.push_back(isTransparent ? 1 : 0);
         any |= isTransparent;
+
+        if (isTransparent)
+        {
+            // Set the corresponding bit in the whitelist
+            uint32_t uintIndex = mat / 32;
+            uint32_t bitIndex = mat % 32;
+            whitelist[uintIndex] |= (1 << bitIndex);
+        }
     }
 
-    mpTransparencyWhitelist = Buffer::createStructured(mpDevice, sizeof(uint), whitelist.size(), ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, whitelist.data(), false);
+    mpTransparencyWhitelist = Buffer::createStructured(mpDevice, sizeof(uint32_t), uintCount, ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, whitelist.data(), false);
+
     return any;
 }
