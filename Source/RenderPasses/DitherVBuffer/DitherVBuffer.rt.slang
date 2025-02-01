@@ -133,6 +133,12 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     if(!winRoulette(alpha, gFrameCount, v.posW))
         IgnoreHit();
     #endif
+    #if DITHER_MODE == DITHER_MODE_PERIODIC
+    let material = gScene.materials.getMaterial(materialID);   
+    float alpha = material.evalOpacity(gScene.materials, v, lod);
+    if(!winRotation(pixel, alpha, gFrameCount))
+        IgnoreHit();
+    #endif
 }
 
 float2 calcMotionVector(uint2 pixel, uint2 frameDim, TriangleHit triangleHit)
