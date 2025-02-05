@@ -42,7 +42,8 @@ public:
         PerPixel16x,
         PerJitter,
         RussianRoulette,
-        Periodic
+        Periodic,
+        HashGrid
     };
 
     FALCOR_ENUM_INFO(DitherMode, {
@@ -52,6 +53,7 @@ public:
         { DitherMode::PerJitter, "PerJitter" },
         { DitherMode::RussianRoulette, "RussianRoulette" },
         { DitherMode::Periodic, "Periodic" },
+        { DitherMode::HashGrid, "HashGrid" },
     });
 
     enum class CoverageCorrection : uint32_t

@@ -698,6 +698,22 @@ struct Scene
         }
     }
 
+        /** Returns a triangle's vertex positions in object space.
+        \param[in] instanceID Geometry instance ID of the mesh.
+        \param[in] triangleIndex Index of the triangle in the given mesh.
+        \param[out] p Position of vertex 0,1,2 in world space.
+    */
+    void getVertexPositionsO(const GeometryInstanceID instanceID, const uint triangleIndex, out float3 p[3])
+    {
+        uint3 vtxIndices = getIndices(instanceID, triangleIndex);
+
+        [unroll]
+        for (int i = 0; i < 3; i++)
+        {
+            p[i] = vertices[vtxIndices[i]].position;
+        }
+    }
+
     /** Returns a triangle's texture coordinates.
         \param[in] instanceID Geometry instance ID of the mesh.
         \param[in] triangleIndex Index of the triangle in the given mesh.

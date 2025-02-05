@@ -4,6 +4,7 @@
 #define DITHER_MODE_PER_JITTER 3
 #define DITHER_MODE_RUSSIAN_ROULETTE 4
 #define DITHER_MODE_PERIODIC 5
+#define DITHER_MODE_HASH_GRID 6
 
 #ifndef DITHER_MODE
 #define DITHER_MODE DITHER_MODE_DISABLED
@@ -47,6 +48,46 @@ float hash3D(float3 v)
 float hash4D(float4 v)
 {
     return hash(float2(hash3D(v.xyz), v.w));
+}
+
+bool winHashGrid(float opacity, uint frameIndex, float3 coord, float maxDeriv)
+{
+    // from Hashed Alpha Testing
+    //float g_HashScale = 1.0;
+    float g_HashScale = 1.0 / 3.0; // subpixel scale (expect ~3*3 = 9 subpixels)
+
+    float pixScale = 1.0 / (g_HashScale * maxDeriv);
+
+    // Find two nearest log-discretized noise scales
+    float2 pixScales = float2(
+        exp2(floor(log2(pixScale))),
+        exp2(ceil(log2(pixScale))) 
+    );
+
+    // Compute alpha thresholds at our two noise scales
+    float2 alpha = float2(
+        hash3D(floor(pixScales.x * coord)),
+        hash3D(floor(pixScales.y * coord))
+    );
+
+    // Factor to interpolate lerp with
+    float lerpFactor = frac( log2(pixScale) );
+    
+    // Interpolate alpha threshold from noise at two scales
+    float x = (1.0 - lerpFactor) * alpha.x + lerpFactor * alpha.y;
+    
+    // Pass into CDF to compute uniformly distrib threshold
+    float a = min(lerpFactor, 1.0 - lerpFactor);
+    float3 cases = float3( 
+        x * x / (2 * a * (1.0 - a)),
+        (x - 0.5 * a) / (1.0 - a),
+        1.0 - ((1.0 - x) * (1.0 - x)/(2.0 * a * (1.0 - a)))
+    );
+
+    float threshold = (x < (1-a)) ? ((x < a) ? cases.x : cases.y) : cases.z;
+    threshold = clamp(threshold, 1e-6, 1.0);
+
+    return opacity >= threshold;
 }
 
 bool winRoulette(float alpha, uint frameIndex, float3 posW)
