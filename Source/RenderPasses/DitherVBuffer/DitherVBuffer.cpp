@@ -32,6 +32,7 @@ namespace
 {
     const std::string kVbuffer = "vbuffer";
     const std::string kMotion = "mvec";
+    const std::string kOpacity = "opacity";
 
     const uint32_t kMaxPayloadSizeBytes = 4; 
     const std::string kProgramRaytraceFile = "RenderPasses/DitherVBuffer/DitherVBuffer.rt.slang";
@@ -85,7 +86,8 @@ RenderPassReflection DitherVBuffer::reflect(const CompileData& compileData)
     // Define the required resources here
     RenderPassReflection reflector;
     reflector.addOutput(kVbuffer, "V-buffer").format(HitInfo::kDefaultFormat);
-    reflector.addOutput(kMotion, "Motion vector").format(ResourceFormat::RG32Float);
+    reflector.addOutput(kMotion, "Motion vector").format(ResourceFormat::RG32Float).flags(RenderPassReflection::Field::Flags::Optional);
+    reflector.addOutput(kOpacity, "Opacity").format(ResourceFormat::R8Unorm).flags(RenderPassReflection::Field::Flags::Optional);
     return reflector;
 }
 
@@ -97,6 +99,7 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
 
     auto pVbuffer = renderData.getTexture(kVbuffer);
     auto pMotion = renderData.getTexture(kMotion);
+    auto pOpacity = renderData.getTexture(kOpacity);
 
     uint2 frameDim = uint2(pVbuffer->getWidth(), pVbuffer->getHeight());
     mpScene->getCamera()->setPatternGenerator(mpSamplePattern, 1.0f / float2(frameDim));
@@ -104,6 +107,7 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     auto var = mpVars->getRootVar();
     var["gVBuffer"] = pVbuffer;
     var["gMotion"] = pMotion;
+    var["gOpacity"] = pOpacity;
     var["gStratifiedIndices"] = mpStratifiedIndices;
     var["gStratifiedLookUpTable"] = mpStratifiedLookUpBuffer;
     assert(mpTransparencyWhitelist);

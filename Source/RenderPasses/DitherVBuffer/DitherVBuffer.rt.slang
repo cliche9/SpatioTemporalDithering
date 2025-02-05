@@ -28,10 +28,11 @@ StructuredBuffer<uint> gTransparencyWhitelist;
 
 RWTexture2D<PackedHitInfo> gVBuffer;
 RWTexture2D<float2> gMotion;
+RWTexture2D<float> gOpacity;
 
 struct RayData
 {
-    float RayTMax;
+    float anyAlpha; // last accepted alpha value from the anyhit shader
 };
 
 void computeRayDifferentials(const TriangleHit hit, float3 rayDir, float hitT, const Camera camera, float2 frameDim, out float2 ddx, out float2 ddy)
@@ -88,6 +89,7 @@ void miss(inout RayData rayData : SV_RayPayload)
     float3 prevEnvMapDir = mul(gScene.camera.data.prevViewMat, float4(rayDirNoJitter, 0.0)).xyz;
     float2 prevUV = ViewSpaceToUV(prevEnvMapDir);
     gMotion[pixel] = prevUV - (float2(pixel)+0.5) / float2(frameDim);
+    gOpacity[pixel] = 1.0;
 }
 
 //Use anyhit for alpha test if activated
@@ -122,12 +124,14 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
         // use default alpha test if not marked as transparent
         if (gScene.materials.alphaTest(v, materialID, lod))
             IgnoreHit();
+        rayData.anyAlpha = 1.0; // mark alpha test as opaque
         return;
     }
     #endif
 
     let material = gScene.materials.getMaterial(materialID);
     float alpha = material.evalOpacity(gScene.materials, v, lod);
+    let originalAlpha = alpha;
     #if COVERAGE_CORRECTION == COVERAGE_CORRECTION_DLSS
     //alpha = pow(saturate(alpha), 0.656);
     if(alpha > 0.01)
@@ -156,6 +160,9 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     if(!winRotation(pixel, alpha, gFrameCount))
         IgnoreHit();
     #endif
+
+    // if hit was accepted, store in anyAlpha
+    rayData.anyAlpha = originalAlpha;
 }
 
 float2 calcMotionVector(uint2 pixel, uint2 frameDim, TriangleHit triangleHit)
@@ -179,6 +186,10 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
     
     gVBuffer[pixel] = HitInfo(triangleHit).getData();
     gMotion[pixel] = calcMotionVector(pixel, frameDim, triangleHit);
+
+    uint materialID = gScene.getMaterialID(triangleHit.instanceID);
+    bool anyhitAlpha = gScene.materials.materialData[materialID].header.getAlphaMode() == AlphaMode::Mask;
+    gOpacity[pixel] = anyhitAlpha ? rayData.anyAlpha : 1.0; // last accepted alpha
 }
 
 [shader("raygeneration")]
@@ -190,7 +201,7 @@ void rayGen()
     Ray ray = gScene.camera.computeRayPinhole(pixel, frameDim);
 
     RayData data;
-    data.RayTMax = ray.tMax;
+    data.anyAlpha = 1.0; // assume opaque
     //TraceRay(gScene.rtAccel, RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xff, 0, rayTypeCount, 0, ray.toRayDesc(), data);
     TraceRay(gScene.rtAccel, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xff, 0, rayTypeCount, 0, ray.toRayDesc(), data);
 }
