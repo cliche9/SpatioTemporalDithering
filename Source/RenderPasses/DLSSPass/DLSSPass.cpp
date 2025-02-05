@@ -185,6 +185,8 @@ void DLSSPass::renderUI(Gui::Widgets& widget)
         widget.text("Input resolution: " + std::to_string(mInputSize.x) + "x" + std::to_string(mInputSize.y));
         widget.text("DLSS output resolution: " + std::to_string(mDLSSOutputSize.x) + "x" + std::to_string(mDLSSOutputSize.y));
         widget.text("Pass output resolution: " + std::to_string(mPassOutputSize.x) + "x" + std::to_string(mPassOutputSize.y));
+
+        if (widget.button("Reset")) mReset = true;
     }
 }
 
@@ -337,9 +339,10 @@ void DLSSPass::executeInternal(RenderContext* pRenderContext, const RenderData& 
             motionVectorScale = inputSize;
 
         mpNGXWrapper->evaluateDLSS(
-            pRenderContext, color.get(), output.get(), motionVectors.get(), depth.get(), mpExposure.get(), false, mSharpness, jitterOffset,
+            pRenderContext, color.get(), output.get(), motionVectors.get(), depth.get(), mpExposure.get(), mReset, mSharpness, jitterOffset,
             motionVectorScale
         );
+        mReset = false;
 
         // Resample the upscaled result from DLSS to the pass output if needed.
         if (useInternalBuffer)

@@ -126,6 +126,7 @@ private:
     bool mExposureUpdated = true;
 
     bool mRecreate = true;
+    bool mReset = false;
     uint2 mInputSize = {};      ///< Input size in pixels.
     uint2 mDLSSOutputSize = {}; ///< DLSS output size in pixels.
     uint2 mPassOutputSize = {}; ///< Pass output size in pixels. If different from DLSS output size, the image gets bilinearly resampled.

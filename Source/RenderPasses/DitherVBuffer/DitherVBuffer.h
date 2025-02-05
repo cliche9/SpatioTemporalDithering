@@ -103,6 +103,7 @@ private:
     bool mUseTransparencyWhitelist = false;
     std::set<std::string> mTransparencyWhitelist;
     CoverageCorrection mCoverageCorrection = CoverageCorrection::Disabled;
+    float mDLSSCorrectionStrength = 1.0;
 };
 
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherMode);

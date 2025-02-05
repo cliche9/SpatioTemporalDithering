@@ -21,6 +21,7 @@ cbuffer PerFrame
     uint gFrameCount;       // Frame count since scene was loaded.
     uint gSampleCount;      // Sample count per pixel.
     uint gSampleIndex;      // looped jitter sequence sample index
+    float gDLSSCorrectionStrength;
 }
 
 StructuredBuffer<uint> gTransparencyWhitelist;
@@ -128,7 +129,12 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     let material = gScene.materials.getMaterial(materialID);
     float alpha = material.evalOpacity(gScene.materials, v, lod);
     #if COVERAGE_CORRECTION == COVERAGE_CORRECTION_DLSS
-    alpha = pow(saturate(alpha), 0.617);
+    //alpha = pow(saturate(alpha), 0.656);
+    if(alpha > 0.01)
+    {
+        float dlssAlpha = saturate(0.0113 + 1.6560 * alpha - 0.8210 * alpha * alpha + 0.1560 * alpha * alpha * alpha);
+        alpha = lerp(alpha, dlssAlpha, gDLSSCorrectionStrength);
+    }
     #endif
 
     #if DITHER_MODE == DITHER_MODE_DISABLED

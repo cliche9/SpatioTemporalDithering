@@ -112,6 +112,7 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["PerFrame"]["gFrameCount"] = mFrameCount++;
     var["PerFrame"]["gSampleCount"] = mpSamplePattern->getSampleCount();
     var["PerFrame"]["gSampleIndex"] = mpSamplePattern->getCurSample();
+    var["PerFrame"]["gDLSSCorrectionStrength"] = mDLSSCorrectionStrength;
 
     mpProgram->addDefine("COVERAGE_CORRECTION", std::to_string(uint32_t(mCoverageCorrection)));
     mpProgram->addDefine("TRANSPARENCY_WHITELIST", mUseTransparencyWhitelist ? "1" : "0");
@@ -136,6 +137,10 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
     widget.checkbox("Alpha Texture LOD", mUseAlphaTextureLOD);
 
     widget.dropdown("Coverage Correction", mCoverageCorrection);
+    if (mCoverageCorrection == CoverageCorrection::DLSS)
+    {
+        widget.slider("DLSS Correction Strength", mDLSSCorrectionStrength, 0.0f, 1.0f);
+    }
 
     widget.checkbox("Transparency Whitelist", mUseTransparencyWhitelist);
     if(mUseTransparencyWhitelist && mpScene)
