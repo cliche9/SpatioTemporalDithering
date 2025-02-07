@@ -29,6 +29,7 @@
 #include "Falcor.h"
 #include "RenderGraph/RenderPass.h"
 #include "Utils/SampleGenerators/HaltonSamplePattern.h"
+#include "SobolGenerator.h"
 
 using namespace Falcor;
 
@@ -99,7 +100,7 @@ private:
 
     uint mFrameCount = 0;
 
-    ref<HaltonSamplePattern> mpSamplePattern;
+    ref<SobolGenerator> mpSamplePattern;
     DitherMode mDitherMode = DitherMode::PerJitter;
     bool mUseAlphaTextureLOD = false; // use lod for alpha lookups
     bool mUseTransparencyWhitelist = false;

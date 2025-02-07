@@ -50,7 +50,8 @@ DitherVBuffer::DitherVBuffer(ref<Device> pDevice, const Properties& props)
     : RenderPass(pDevice)
 {
     mpSampleGenerator = SampleGenerator::create(mpDevice, SAMPLE_GENERATOR_UNIFORM);
-    mpSamplePattern = HaltonSamplePattern::create(16);
+    //mpSamplePattern = HaltonSamplePattern::create(16);
+    mpSamplePattern.reset(new SobolGenerator());
     createStratifiedBuffers();
     // load properties
     for (const auto& [key, value] : props)
@@ -132,11 +133,11 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
 void DitherVBuffer::renderUI(Gui::Widgets& widget)
 {
     auto sampleCount = mpSamplePattern->getSampleCount();
-    if(widget.var("Sample Count", sampleCount, 1u, 16u)) // sizes > 16 generate too much possible combinations for the dither pattern (per jitter)
-    {
-        mpSamplePattern->setSampleCount(sampleCount);
-        createStratifiedBuffers();
-    }
+    //if(widget.var("Sample Count", sampleCount, 1u, 16u)) // sizes > 16 generate too much possible combinations for the dither pattern (per jitter)
+    //{
+    //    mpSamplePattern->setSampleCount(sampleCount);
+    //    createStratifiedBuffers();
+    //}
     widget.dropdown("Dither", mDitherMode);
     widget.checkbox("Alpha Texture LOD", mUseAlphaTextureLOD);
 
