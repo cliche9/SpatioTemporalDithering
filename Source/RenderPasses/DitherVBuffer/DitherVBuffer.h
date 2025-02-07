@@ -44,7 +44,8 @@ public:
         PerJitter,
         RussianRoulette,
         Periodic,
-        HashGrid
+        HashGrid,
+        FractalDithering
     };
 
     FALCOR_ENUM_INFO(DitherMode, {
@@ -55,6 +56,7 @@ public:
         { DitherMode::RussianRoulette, "RussianRoulette" },
         { DitherMode::Periodic, "Periodic" },
         { DitherMode::HashGrid, "HashGrid" },
+        { DitherMode::FractalDithering, "FractalDithering" },
     });
 
     enum class CoverageCorrection : uint32_t

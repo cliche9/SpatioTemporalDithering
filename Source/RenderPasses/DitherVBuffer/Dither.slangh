@@ -5,6 +5,7 @@
 #define DITHER_MODE_RUSSIAN_ROULETTE 4
 #define DITHER_MODE_PERIODIC 5
 #define DITHER_MODE_HASH_GRID 6
+#define DITHER_MODE_FRACTAL_DITHERING 7
 
 #ifndef DITHER_MODE
 #define DITHER_MODE DITHER_MODE_DISABLED
@@ -60,6 +61,12 @@ float hashDither(float2 v)
     int x = imod4(int(v.x));
     int y = imod4(int(v.y));
     return (ditherMatrix[x][y] + 0.5) / 16.0;
+}
+
+bool winFractalDither(float opacity, float2 coord, float maxDeriv, uint2 pixel, uint frameCount)
+{
+
+    return true;
 }
 
 bool winHashGrid2D(float opacity, float2 coord, float maxDeriv, uint2 pixel, uint frameCount)

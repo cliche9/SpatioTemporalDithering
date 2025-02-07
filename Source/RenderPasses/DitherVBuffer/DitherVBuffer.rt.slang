@@ -186,6 +186,11 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     if(!winHashGrid2D(alpha, v.texC, maxDeriv, pixel, gFrameCount))
         IgnoreHit();
     #endif
+    #if DITHER_MODE == DITHER_MODE_FRACTAL_DITHERING
+    float maxDeriv = max(length(ddx), length(ddy));
+    if(!winFractalDither(alpha, v.texC, maxDeriv, pixel, gFrameCount))
+        IgnoreHit();
+    #endif
 }
 
 float2 calcMotionVector(uint2 pixel, uint2 frameDim, TriangleHit triangleHit)
