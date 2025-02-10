@@ -59,6 +59,19 @@ public:
         { DitherMode::FractalDithering, "FractalDithering" },
     });
 
+    enum class DitherPattern : uint32_t
+    {
+        Dither2x2,
+        Dither4x4,
+        Dither8x8,
+    };
+
+    FALCOR_ENUM_INFO(DitherPattern, {
+       { DitherPattern::Dither2x2, "Dither2x2" },
+       { DitherPattern::Dither4x4, "Dither4x4" },
+       { DitherPattern::Dither8x8, "Dither8x8" },
+    });
+
     enum class CoverageCorrection : uint32_t
     {
         Disabled,
@@ -86,6 +99,8 @@ public:
     virtual bool onKeyEvent(const KeyboardEvent& keyEvent) override { return false; }
 
 private:
+    void setFractalDitherPattern(DitherPattern pattern);
+
     void setupProgram();
     void createStratifiedBuffers();
     // returns true if at least one material was whitelisted (or scene was invalid)
@@ -102,13 +117,15 @@ private:
 
     uint mFrameCount = 0;
 
-    ref<SobolGenerator> mpSamplePattern;
+    //ref<SobolGenerator> mpSamplePattern;
+    ref<HaltonSamplePattern> mpSamplePattern;
     DitherMode mDitherMode = DitherMode::PerJitter;
     bool mUseAlphaTextureLOD = false; // use lod for alpha lookups
     bool mUseTransparencyWhitelist = false;
     std::set<std::string> mTransparencyWhitelist;
     CoverageCorrection mCoverageCorrection = CoverageCorrection::Disabled;
     float mDLSSCorrectionStrength = 1.0;
+    DitherPattern mFractalDitherPattern = DitherPattern::Dither2x2;
 
     ref<Texture> mpFracDitherTex;
     ref<Sampler> mpFracSampler;
@@ -116,3 +133,4 @@ private:
 
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherMode);
 FALCOR_ENUM_REGISTER(DitherVBuffer::CoverageCorrection);
+FALCOR_ENUM_REGISTER(DitherVBuffer::DitherPattern);

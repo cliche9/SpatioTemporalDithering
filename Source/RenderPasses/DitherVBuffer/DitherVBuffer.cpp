@@ -50,11 +50,11 @@ DitherVBuffer::DitherVBuffer(ref<Device> pDevice, const Properties& props)
     : RenderPass(pDevice)
 {
     mpSampleGenerator = SampleGenerator::create(mpDevice, SAMPLE_GENERATOR_UNIFORM);
-    //mpSamplePattern = HaltonSamplePattern::create(16);
-    mpSamplePattern.reset(new SobolGenerator());
+    mpSamplePattern = HaltonSamplePattern::create(16);
+    //mpSamplePattern.reset(new SobolGenerator());
     createStratifiedBuffers();
 
-    mpFracDitherTex = Texture::createFromFile(mpDevice, "dither/Dither3D_2x2.dds", false, false);
+    setFractalDitherPattern(mFractalDitherPattern);
     Sampler::Desc sd;
     sd.setFilterMode(Sampler::Filter::Linear, Sampler::Filter::Linear, Sampler::Filter::Linear);
     sd.setAddressingMode(Sampler::AddressMode::Wrap, Sampler::AddressMode::Wrap, Sampler::AddressMode::Clamp);
@@ -142,12 +142,20 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
 void DitherVBuffer::renderUI(Gui::Widgets& widget)
 {
     auto sampleCount = mpSamplePattern->getSampleCount();
-    //if(widget.var("Sample Count", sampleCount, 1u, 16u)) // sizes > 16 generate too much possible combinations for the dither pattern (per jitter)
-    //{
-    //    mpSamplePattern->setSampleCount(sampleCount);
-    //    createStratifiedBuffers();
-    //}
+    if(widget.var("Sample Count", sampleCount, 1u, 16u)) // sizes > 16 generate too much possible combinations for the dither pattern (per jitter)
+    {
+        mpSamplePattern->setSampleCount(sampleCount);
+        createStratifiedBuffers();
+    }
     widget.dropdown("Dither", mDitherMode);
+    if(mDitherMode == DitherMode::FractalDithering)
+    {
+        if(widget.dropdown("Pattern", mFractalDitherPattern))
+        {
+            setFractalDitherPattern(mFractalDitherPattern);
+        }
+    }
+
     widget.checkbox("Alpha Texture LOD", mUseAlphaTextureLOD);
 
     widget.dropdown("Coverage Correction", mCoverageCorrection);
@@ -184,6 +192,25 @@ void DitherVBuffer::setScene(RenderContext* pRenderContext, const ref<Scene>& pS
     {
         mUseTransparencyWhitelist = false; // disable whitelist since nothing is whitelisted (might confuse people when loading in custom scenes)
     }
+}
+
+void DitherVBuffer::setFractalDitherPattern(DitherPattern pattern)
+{
+    mFractalDitherPattern = pattern;
+    std::string texname;
+    switch(pattern)
+    {
+    case DitherPattern::Dither2x2:
+        texname = "dither/Dither3D_2x2.dds";
+        break;
+    case DitherPattern::Dither4x4:
+        texname = "dither/Dither3D_4x4.dds";
+        break;
+    case DitherPattern::Dither8x8:
+        texname = "dither/Dither3D_8x8.dds";
+        break;
+    }
+    mpFracDitherTex = Texture::createFromFile(mpDevice, texname, false, false);
 }
 
 void DitherVBuffer::setupProgram()

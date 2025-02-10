@@ -68,7 +68,7 @@ float hashDither(float2 v)
 
 bool winFractalDither(float opacity, float2 coord, float2 dx, float2 dy)
 {
-    float g_Scale = 10.0 / 1.0;
+    float g_Scale = 4.0 / 1.0;
     float g_SizeVariability = 1.0;
 
     // adjusted dither code from: https://github.com/runevision/Dither3D/blob/main/Assets/Dither3D/Dither3DInclude.cginc
