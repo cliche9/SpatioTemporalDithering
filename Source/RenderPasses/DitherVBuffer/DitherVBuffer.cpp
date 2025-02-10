@@ -128,6 +128,8 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["PerFrame"]["gSampleIndex"] = mpSamplePattern->getCurSample();
     var["PerFrame"]["gDLSSCorrectionStrength"] = mDLSSCorrectionStrength;
 
+    var["DitherConstants"]["gGridScale"] = mGridScale;
+
     mpProgram->addDefine("COVERAGE_CORRECTION", std::to_string(uint32_t(mCoverageCorrection)));
     mpProgram->addDefine("TRANSPARENCY_WHITELIST", mUseTransparencyWhitelist ? "1" : "0");
     mpProgram->addDefine("DITHER_MODE", std::to_string(uint32_t(mDitherMode)));
@@ -142,7 +144,7 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
 void DitherVBuffer::renderUI(Gui::Widgets& widget)
 {
     auto sampleCount = mpSamplePattern->getSampleCount();
-    if(widget.var("Sample Count", sampleCount, 1u, 16u)) // sizes > 16 generate too much possible combinations for the dither pattern (per jitter)
+    if(widget.var("Sample Count", sampleCount, 0u, 16u)) // sizes > 16 generate too much possible combinations for the dither pattern (per jitter)
     {
         mpSamplePattern->setSampleCount(sampleCount);
         createStratifiedBuffers();
@@ -154,6 +156,10 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
         {
             setFractalDitherPattern(mFractalDitherPattern);
         }
+    }
+    if(mDitherMode == DitherMode::FractalDithering || mDitherMode == DitherMode::HashGrid)
+    {
+        widget.var("Grid Scale", mGridScale, 0.01f, 16.0f, 0.01f);
     }
 
     widget.checkbox("Alpha Texture LOD", mUseAlphaTextureLOD);
@@ -246,7 +252,10 @@ void DitherVBuffer::createStratifiedBuffers()
 {
     std::vector<int> indices;
     std::vector<uint32_t> lookUpTable;
-    generateStratifiedLookupTable(mpSamplePattern->getSampleCount(), indices, lookUpTable);
+    auto n = 16;
+    if(mpSamplePattern->getSampleCount() != 0)
+        n = mpSamplePattern->getSampleCount();
+    generateStratifiedLookupTable(n, indices, lookUpTable);
 
     mpStratifiedIndices = Buffer::createStructured(mpDevice, sizeof(indices[0]), uint32_t(indices.size()), ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, indices.data(), false);
     mpStratifiedLookUpBuffer = Buffer::createStructured(mpDevice, sizeof(lookUpTable[0]), uint32_t(lookUpTable.size()), ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, lookUpTable.data(), false);

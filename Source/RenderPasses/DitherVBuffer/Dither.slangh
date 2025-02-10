@@ -24,6 +24,11 @@ StructuredBuffer<uint> gStratifiedLookUpTable;
 Texture3D<float> gDitherTex;
 SamplerState gDitherSampler;
 
+cbuffer DitherConstants
+{
+    float gGridScale;
+};
+
 static const int4x4 ditherMatrix = int4x4(
         float4(0, 8, 2, 10),
         float4(12, 4, 14, 6),
@@ -68,8 +73,8 @@ float hashDither(float2 v)
 
 bool winFractalDither(float opacity, float2 coord, float2 dx, float2 dy)
 {
-    float g_Scale = 4.0 / 1.0;
-    float g_SizeVariability = 1.0;
+    float g_Scale = gGridScale;
+    float g_SizeVariability = 0.0;
 
     // adjusted dither code from: https://github.com/runevision/Dither3D/blob/main/Assets/Dither3D/Dither3DInclude.cginc
     float xRes, yRes, zRes;
@@ -187,7 +192,7 @@ bool winHashGrid2D(float opacity, float2 coord, float maxDeriv, uint2 pixel, uin
 {
     // from Hashed Alpha Testing
     //float g_HashScale = 1.0;
-    float g_HashScale = 1.0 / 4.0; // subpixel scale (expect ~4*4 = 16 subpixels)
+    float g_HashScale = gGridScale; // subpixel scale (expect ~4*4 = 16 subpixels)
 
     float pixScale = 1.0 / (g_HashScale * maxDeriv);
 
@@ -256,7 +261,7 @@ bool winHashGrid(float opacity, float3 coord, float maxDeriv)
 {
     // from Hashed Alpha Testing
     //float g_HashScale = 1.0;
-    float g_HashScale = 1.0 / 4.0; // subpixel scale (expect ~4*4 = 16 subpixels)
+    float g_HashScale = gGridScale; // subpixel scale (expect ~4*4 = 16 subpixels)
 
     float pixScale = 1.0 / (g_HashScale * maxDeriv);
 

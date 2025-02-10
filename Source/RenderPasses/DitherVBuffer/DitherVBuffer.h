@@ -107,7 +107,7 @@ private:
     bool updateWhitelistBuffer();
 
     ref<Scene> mpScene;
-
+    
     ref<RtProgram> mpProgram;
     ref<RtProgramVars> mpVars;
     ref<SampleGenerator> mpSampleGenerator;
@@ -126,6 +126,7 @@ private:
     CoverageCorrection mCoverageCorrection = CoverageCorrection::Disabled;
     float mDLSSCorrectionStrength = 1.0;
     DitherPattern mFractalDitherPattern = DitherPattern::Dither2x2;
+    float mGridScale = 0.25f;
 
     ref<Texture> mpFracDitherTex;
     ref<Sampler> mpFracSampler;
