@@ -177,7 +177,7 @@ bool winFractalDither(float opacity, float2 coord, float2 dx, float2 dy)
     subLayer = (subLayer - 0.5) * invZres;
 
     // Sample the 3D texture.
-    float pattern = gDitherTex.SampleLevel(gDitherSampler, float3(uv, subLayer), 0.0).r;
+    float pattern = gDitherTex.SampleLevel(gDitherSampler, float3(uv, 1.0-subLayer), 0.0).r;
 
     // use current opacity as threshold and the dither pattern as value
     return pattern < opacity;
