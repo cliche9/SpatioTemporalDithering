@@ -71,7 +71,7 @@ float hashDither(float2 v)
     return (ditherMatrix[x][y] + 0.5) / 16.0;
 }
 
-bool winFractalDither(float opacity, float2 coord, float2 dx, float2 dy)
+bool winFractalDither(float opacity, float2 coord, float2 dx, float2 dy, float4x4 cameraProjection)
 {
     float g_Scale = gGridScale;
     float g_SizeVariability = 0.0;
@@ -94,6 +94,26 @@ bool winFractalDither(float opacity, float2 coord, float2 dx, float2 dy)
     //float2 lookup = float2((0.5 * invXres + (1 - invXres) * opacity), 0.5);
     //opacity = tex2D(_DitherRampTex, lookup).r;
 
+    #define RADIAL_COMPENSATION 0
+    #if RADIAL_COMPENSATION != 0
+    // Convert pixel coordinate to normalized screen space [-1, 1] with (0, 0) at the center
+    float2 screenP = (float2(DispatchRaysIndex().xy) / float2(DispatchRaysDimensions().xy) - 0.5) * 2.0;
+    // Calculate view direction projected onto camera plane.
+    float2 viewDirProj = float2(
+        screenP.x / cameraProjection[0][0],
+        screenP.y / -cameraProjection[1][1]
+    );
+
+    // Calculate how much dots should be larger towards the edges of the screen.
+    // This is meant to keep dots completely stable under camera rotation.
+    // Currently it doesn't entirely work but is more stable than no compensation.
+    float radialCompensation = dot(viewDirProj, viewDirProj) + 1;
+
+    // Apply compensation to dx and dy
+    dx *= radialCompensation;
+    dy *= radialCompensation;
+    #endif
+    
     // Get frequency based on singular value decomposition.
     // A simpler approach would have been to use fwidth(uv_DitherTex).
     // However:
@@ -242,13 +262,13 @@ bool winHashGrid2D(float opacity, float2 coord, float maxDeriv, uint2 pixel, uin
     float threshold = (x < (1-a)) ? ((x < a) ? cases.x : cases.y) : cases.z;
 
     // stratify here
-    //float rng1 = hash3D(float3(GeometryIndex(), PrimitiveIndex() / 2u, InstanceID()));//threshold;//(ditherMatrix[imod4(hashPixel.x)][imod4(hashPixel.y)]) / 16.0;
-    //float rng2 = hash3D(float3(InstanceID(), GeometryIndex(), PrimitiveIndex() / 2u));
-    //int i = frameCount % 16;
-    //i = ((pixel.x % 4) + 4 * (pixel.y % 4) + frameCount) % 16;
-    //int a0 = int(16 * rng1);
-    //int aplus = 2 * int(0.5 * 16.0 * rng2) + 1;
-    //threshold = (threshold + float((a0 + i * aplus) % 16)) / 16.0;
+    float rng1 = hash3D(float3(GeometryIndex(), PrimitiveIndex() / 2u, InstanceID()));//threshold;//(ditherMatrix[imod4(hashPixel.x)][imod4(hashPixel.y)]) / 16.0;
+    float rng2 = hash3D(float3(InstanceID(), GeometryIndex(), PrimitiveIndex() / 2u));
+    int i = frameCount % 16;
+    i = ((pixel.x % 4) + 4 * (pixel.y % 4) + frameCount) % 16;
+    int a0 = int(16 * rng1);
+    int aplus = 2 * int(0.5 * 16.0 * rng2) + 1;
+    threshold = (threshold + float((a0 + i * aplus) % 16)) / 16.0;
 
     
 

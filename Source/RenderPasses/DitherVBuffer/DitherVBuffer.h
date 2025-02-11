@@ -30,6 +30,7 @@
 #include "RenderGraph/RenderPass.h"
 #include "Utils/SampleGenerators/HaltonSamplePattern.h"
 #include "SobolGenerator.h"
+#include "Utils/SampleGenerators/StratifiedSamplePattern.h"
 
 using namespace Falcor;
 
@@ -83,6 +84,19 @@ public:
         { CoverageCorrection::DLSS, "DLSS" },
     });
 
+    enum class SamplePattern : uint32_t
+    {
+        Halton,
+        Stratified,
+        Sobol,
+    };
+
+    FALCOR_ENUM_INFO(SamplePattern, {
+        { SamplePattern::Halton, "Halton"},
+        { SamplePattern::Stratified, "Stratified" },
+        { SamplePattern::Sobol, "Sobol"},
+    });
+
     FALCOR_PLUGIN_CLASS(DitherVBuffer, "DitherVBuffer", "VBuffer with Dithering options for transparency");
 
     static ref<DitherVBuffer> create(ref<Device> pDevice, const Properties& props) { return make_ref<DitherVBuffer>(pDevice, props); }
@@ -105,6 +119,7 @@ private:
     void createStratifiedBuffers();
     // returns true if at least one material was whitelisted (or scene was invalid)
     bool updateWhitelistBuffer();
+    void createSamplePattern(uint sampleCount);
 
     ref<Scene> mpScene;
     
@@ -117,15 +132,16 @@ private:
 
     uint mFrameCount = 0;
 
-    //ref<SobolGenerator> mpSamplePattern;
-    ref<HaltonSamplePattern> mpSamplePattern;
+    ref<CPUSampleGenerator> mpSamplePattern;
+    SamplePattern mSamplePattern = SamplePattern::Halton;
+
     DitherMode mDitherMode = DitherMode::PerJitter;
     bool mUseAlphaTextureLOD = false; // use lod for alpha lookups
     bool mUseTransparencyWhitelist = false;
     std::set<std::string> mTransparencyWhitelist;
     CoverageCorrection mCoverageCorrection = CoverageCorrection::Disabled;
     float mDLSSCorrectionStrength = 1.0;
-    DitherPattern mFractalDitherPattern = DitherPattern::Dither2x2;
+    DitherPattern mFractalDitherPattern = DitherPattern::Dither8x8;
     float mGridScale = 0.25f;
 
     ref<Texture> mpFracDitherTex;
@@ -135,3 +151,4 @@ private:
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherMode);
 FALCOR_ENUM_REGISTER(DitherVBuffer::CoverageCorrection);
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherPattern);
+FALCOR_ENUM_REGISTER(DitherVBuffer::SamplePattern);

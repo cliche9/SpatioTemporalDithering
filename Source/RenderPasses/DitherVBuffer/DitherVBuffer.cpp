@@ -50,8 +50,7 @@ DitherVBuffer::DitherVBuffer(ref<Device> pDevice, const Properties& props)
     : RenderPass(pDevice)
 {
     mpSampleGenerator = SampleGenerator::create(mpDevice, SAMPLE_GENERATOR_UNIFORM);
-    mpSamplePattern = HaltonSamplePattern::create(16);
-    //mpSamplePattern.reset(new SobolGenerator());
+    createSamplePattern(16);
     createStratifiedBuffers();
 
     setFractalDitherPattern(mFractalDitherPattern);
@@ -125,7 +124,7 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
 
     var["PerFrame"]["gFrameCount"] = mFrameCount++;
     var["PerFrame"]["gSampleCount"] = mpSamplePattern->getSampleCount();
-    var["PerFrame"]["gSampleIndex"] = mpSamplePattern->getCurSample();
+    var["PerFrame"]["gSampleIndex"] = mFrameCount % std::max(1u, mpSamplePattern->getSampleCount());//mpSamplePattern->getCurSample();
     var["PerFrame"]["gDLSSCorrectionStrength"] = mDLSSCorrectionStrength;
 
     var["DitherConstants"]["gGridScale"] = mGridScale;
@@ -144,9 +143,14 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
 void DitherVBuffer::renderUI(Gui::Widgets& widget)
 {
     auto sampleCount = mpSamplePattern->getSampleCount();
+    if(widget.dropdown("Sample Pattern", mSamplePattern))
+    {
+        createSamplePattern(sampleCount);
+        createStratifiedBuffers();
+    }
     if(widget.var("Sample Count", sampleCount, 0u, 16u)) // sizes > 16 generate too much possible combinations for the dither pattern (per jitter)
     {
-        mpSamplePattern->setSampleCount(sampleCount);
+        createSamplePattern(sampleCount);
         createStratifiedBuffers();
     }
     widget.dropdown("Dither", mDitherMode);
@@ -291,4 +295,22 @@ bool DitherVBuffer::updateWhitelistBuffer()
     mpTransparencyWhitelist = Buffer::createStructured(mpDevice, sizeof(uint32_t), uintCount, ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, whitelist.data(), false);
 
     return any;
+}
+
+void DitherVBuffer::createSamplePattern(uint sampleCount)
+{
+    switch(mSamplePattern)
+    {
+    case SamplePattern::Halton:
+        mpSamplePattern = HaltonSamplePattern::create(sampleCount);
+        break;
+    case SamplePattern::Stratified:
+        mpSamplePattern = StratifiedSamplePattern::create(sampleCount);
+        break;
+    case SamplePattern::Sobol:
+        mpSamplePattern.reset(new SobolGenerator());
+        break;
+    default:
+        assert(false);
+    }
 }

@@ -188,7 +188,7 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     #endif
     #if DITHER_MODE == DITHER_MODE_FRACTAL_DITHERING
     float maxDeriv = max(length(ddx), length(ddy));
-    if(!winFractalDither(alpha, v.texC, ddx, ddy))
+    if (!winFractalDither(alpha, v.texC, ddx, ddy, gScene.camera.data.projMat))
         IgnoreHit();
     #endif
 }
