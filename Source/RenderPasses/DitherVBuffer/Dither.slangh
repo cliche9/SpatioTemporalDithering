@@ -23,9 +23,12 @@ StructuredBuffer<uint> gStratifiedLookUpTable;
 
 Texture3D<float> gDitherTex;
 SamplerState gDitherSampler;
+Texture2D<float> gNoiseTex;
+SamplerState gNoiseSampler;
 
 cbuffer DitherConstants
 {
+    float2 gNoiseScale; // inverse resolution for noise texture
     float gGridScale;
 };
 
@@ -45,6 +48,12 @@ float hash1D(float v)
 float hash(float2 v)
 {
     return frac(1.0e4 * sin(17.0 * v.x + 0.1 * v.y) * (0.1 + abs(sin(13.0 * v.y + v.x))));
+}
+
+float noise(float2 uv)
+{
+    //return pow(gNoiseTex.SampleLevel(gNoiseSampler, uv * gNoiseScale, 0.0).r, 2.2);
+    return gNoiseTex.SampleLevel(gNoiseSampler, uv * gNoiseScale, 0.0).r;
 }
 
 // 3D hash function from "Improved Alpha Testing Using Hashed Sampling"
@@ -231,8 +240,10 @@ bool winHashGrid2D(float opacity, float2 coord, float maxDeriv, uint2 pixel, uin
 
     // Compute alpha thresholds at our two noise scales
     float2 alpha = float2(
-        hash(floor(pixScales.x * coord)),
-        hash(floor(pixScales.y * coord))
+        //hash(floor(pixScales.x * coord)),
+        //hash(floor(pixScales.y * coord))
+        noise(floor(pixScales.x * coord)),
+        noise(floor(pixScales.y * coord))
     );
 
     int4 hashPixel = int4(floor(pixScales.x * coord), floor(pixScales.y * coord));
@@ -262,13 +273,13 @@ bool winHashGrid2D(float opacity, float2 coord, float maxDeriv, uint2 pixel, uin
     float threshold = (x < (1-a)) ? ((x < a) ? cases.x : cases.y) : cases.z;
 
     // stratify here
-    float rng1 = hash3D(float3(GeometryIndex(), PrimitiveIndex() / 2u, InstanceID()));//threshold;//(ditherMatrix[imod4(hashPixel.x)][imod4(hashPixel.y)]) / 16.0;
-    float rng2 = hash3D(float3(InstanceID(), GeometryIndex(), PrimitiveIndex() / 2u));
-    int i = frameCount % 16;
-    i = ((pixel.x % 4) + 4 * (pixel.y % 4) + frameCount) % 16;
-    int a0 = int(16 * rng1);
-    int aplus = 2 * int(0.5 * 16.0 * rng2) + 1;
-    threshold = (threshold + float((a0 + i * aplus) % 16)) / 16.0;
+    //float rng1 = hash3D(float3(GeometryIndex(), PrimitiveIndex() / 2u, InstanceID()));//threshold;//(ditherMatrix[imod4(hashPixel.x)][imod4(hashPixel.y)]) / 16.0;
+    //float rng2 = hash3D(float3(InstanceID(), GeometryIndex(), PrimitiveIndex() / 2u));
+    //int i = frameCount % 16;
+    //i = ((pixel.x % 4) + 4 * (pixel.y % 4) + frameCount) % 16;
+    //int a0 = int(16 * rng1);
+    //int aplus = 2 * int(0.5 * 16.0 * rng2) + 1;
+    //threshold = (threshold + float((a0 + i * aplus) % 16)) / 16.0;
 
     
 

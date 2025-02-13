@@ -52,12 +52,15 @@ DitherVBuffer::DitherVBuffer(ref<Device> pDevice, const Properties& props)
     mpSampleGenerator = SampleGenerator::create(mpDevice, SAMPLE_GENERATOR_UNIFORM);
     createSamplePattern(16);
     createStratifiedBuffers();
-
+    createNoisePattern();
     setFractalDitherPattern(mFractalDitherPattern);
     Sampler::Desc sd;
     sd.setFilterMode(Sampler::Filter::Linear, Sampler::Filter::Linear, Sampler::Filter::Linear);
     sd.setAddressingMode(Sampler::AddressMode::Wrap, Sampler::AddressMode::Wrap, Sampler::AddressMode::Clamp);
     mpFracSampler = Sampler::create(mpDevice, sd);
+    sd.setFilterMode(Sampler::Filter::Point, Sampler::Filter::Point, Sampler::Filter::Point);
+    sd.setAddressingMode(Sampler::AddressMode::Wrap, Sampler::AddressMode::Wrap, Sampler::AddressMode::Wrap);
+    mpNoiseSampler = Sampler::create(mpDevice, sd);
 
     // load properties
     for (const auto& [key, value] : props)
@@ -119,6 +122,8 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["gStratifiedLookUpTable"] = mpStratifiedLookUpBuffer;
     var["gDitherTex"] = mpFracDitherTex;
     var["gDitherSampler"] = mpFracSampler;
+    var["gNoiseTex"] = mpNoiseTex;
+    var["gNoiseSampler"] = mpNoiseSampler;
     assert(mpTransparencyWhitelist);
     var["gTransparencyWhitelist"] = mpTransparencyWhitelist;
 
@@ -128,6 +133,7 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["PerFrame"]["gDLSSCorrectionStrength"] = mDLSSCorrectionStrength;
 
     var["DitherConstants"]["gGridScale"] = mGridScale;
+    var["DitherConstants"]["gNoiseScale"] = float2(1.0f / mpNoiseTex->getWidth(), 1.0f / mpNoiseTex->getHeight());
 
     mpProgram->addDefine("COVERAGE_CORRECTION", std::to_string(uint32_t(mCoverageCorrection)));
     mpProgram->addDefine("TRANSPARENCY_WHITELIST", mUseTransparencyWhitelist ? "1" : "0");
@@ -164,6 +170,13 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
     if(mDitherMode == DitherMode::FractalDithering || mDitherMode == DitherMode::HashGrid)
     {
         widget.var("Grid Scale", mGridScale, 0.01f, 16.0f, 0.01f);
+    }
+    if(mDitherMode == DitherMode::HashGrid)
+    {
+        if(widget.dropdown("Noise Pattern", mNoisePattern))
+        {
+            createNoisePattern();
+        }
     }
 
     widget.checkbox("Alpha Texture LOD", mUseAlphaTextureLOD);
@@ -313,4 +326,20 @@ void DitherVBuffer::createSamplePattern(uint sampleCount)
     default:
         assert(false);
     }
+}
+
+void DitherVBuffer::createNoisePattern()
+{
+    std::string texname;
+    switch (mNoisePattern)
+    {
+    case NoisePattern::White:
+        texname = "dither/whitenoise1024.dds";
+        break;
+    case NoisePattern::Blue:
+        texname = "dither/bluenoise1024.dds";
+        break;
+    }
+
+    mpNoiseTex = Texture::createFromFile(mpDevice, texname, false, false);
 }

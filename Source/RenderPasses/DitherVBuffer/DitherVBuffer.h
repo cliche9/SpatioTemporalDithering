@@ -97,6 +97,17 @@ public:
         { SamplePattern::Sobol, "Sobol"},
     });
 
+    enum class NoisePattern : uint32_t
+    {
+        White,
+        Blue,
+    };
+
+    FALCOR_ENUM_INFO(NoisePattern, {
+        {NoisePattern::White, "White"},
+        {NoisePattern::Blue, "Blue"},
+    });
+
     FALCOR_PLUGIN_CLASS(DitherVBuffer, "DitherVBuffer", "VBuffer with Dithering options for transparency");
 
     static ref<DitherVBuffer> create(ref<Device> pDevice, const Properties& props) { return make_ref<DitherVBuffer>(pDevice, props); }
@@ -120,6 +131,7 @@ private:
     // returns true if at least one material was whitelisted (or scene was invalid)
     bool updateWhitelistBuffer();
     void createSamplePattern(uint sampleCount);
+    void createNoisePattern();
 
     ref<Scene> mpScene;
     
@@ -146,9 +158,13 @@ private:
 
     ref<Texture> mpFracDitherTex;
     ref<Sampler> mpFracSampler;
+    ref<Texture> mpNoiseTex;
+    ref<Sampler> mpNoiseSampler;
+    NoisePattern mNoisePattern = NoisePattern::White;
 };
 
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherMode);
 FALCOR_ENUM_REGISTER(DitherVBuffer::CoverageCorrection);
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherPattern);
 FALCOR_ENUM_REGISTER(DitherVBuffer::SamplePattern);
+FALCOR_ENUM_REGISTER(DitherVBuffer::NoisePattern);
