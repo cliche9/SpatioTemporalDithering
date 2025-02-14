@@ -27,6 +27,7 @@
  **************************************************************************/
 #include "DitherVBuffer.h"
 #include "DitherLookup.h"
+#include "MidpointGenerator.h"
 #include "Scene/Lighting/LightSettings.h"
 #include "Scene/Lighting/ShadowSettings.h"
 
@@ -339,6 +340,8 @@ void DitherVBuffer::createSamplePattern(uint sampleCount)
     case SamplePattern::Sobol:
         mpSamplePattern.reset(new SobolGenerator());
         break;
+    case SamplePattern::Midpoint:
+        mpSamplePattern.reset(new MidpointGenerator());
     default:
         assert(false);
     }

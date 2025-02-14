@@ -89,12 +89,14 @@ public:
         Halton,
         Stratified,
         Sobol,
+        Midpoint
     };
 
     FALCOR_ENUM_INFO(SamplePattern, {
         { SamplePattern::Halton, "Halton"},
         { SamplePattern::Stratified, "Stratified" },
         { SamplePattern::Sobol, "Sobol"},
+        { SamplePattern::Midpoint, "Midpoint"},
     });
 
     enum class NoisePattern : uint32_t
