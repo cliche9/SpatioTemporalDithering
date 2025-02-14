@@ -1,5 +1,7 @@
 #include "Scene/SceneDefines.slangh"
 #include "Utils/Math/MathConstants.slangh"
+#include "Scene/Lighting/Lighting.slangh"
+#include "Scene/Lighting/RayShadow.slangh"
 
 import Scene.Raytracing;
 import Scene.Intersection;
@@ -25,16 +27,24 @@ cbuffer PerFrame
     uint gSampleCount;      // Sample count per pixel.
     uint gSampleIndex;      // looped jitter sequence sample index
     float gDLSSCorrectionStrength;
+
+    float gMinVisibility; // everything below (and including) this transparency will be resolved via russian roulette or dither
+    //int maxHits;
 }
+
+#define MIN_VISIBILITY 0.001
 
 StructuredBuffer<uint> gTransparencyWhitelist;
 
 RWTexture2D<PackedHitInfo> gVBuffer;
 RWTexture2D<float2> gMotion;
-RWTexture2D<float> gOpacity;
+RWTexture2D<float> gOpacity; // mask for TAA
+RWTexture2D<float4> gTransparent; // rgba transparent color
 
 struct RayData
 {
+    float4 color;
+    float rayT; // input: TMax, output: TCurrent
     float minAlphaT; // RayT value of closest alpha-blended hit
 };
 
@@ -111,6 +121,11 @@ void miss(inout RayData rayData : SV_RayPayload)
     gOpacity[pixel] = rayData.minAlphaT < RayTCurrent() ? 1.0 : 0.0;
 }
 
+bool useRussianRouletteForAlphaTest(RayData rayData)
+{
+    return rayData.color.w <= max(MIN_VISIBILITY, gMinVisibility);
+}
+
 //Use anyhit for alpha test if activated
 [shader("anyhit")]
 void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAttributes attribs : SV_IntersectionAttributes)
@@ -149,16 +164,16 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
 
     let material = gScene.materials.getMaterial(materialID);
     float alpha = material.evalOpacity(gScene.materials, v, lod);
-    if(alpha > 0.01)
-        rayData.minAlphaT = min(rayData.minAlphaT, RayTCurrent()); // store if alpha was encountered
+    if(alpha <= 0.01) IgnoreHit(); // no hit
+
+    rayData.minAlphaT = min(rayData.minAlphaT, RayTCurrent()); // store if alpha was encountered
+
+    if(!useRussianRouletteForAlphaTest(rayData)) return; // accept this as hit
+    // below: russian roulette for alpha test
 
     #if COVERAGE_CORRECTION == COVERAGE_CORRECTION_DLSS
-    //alpha = pow(saturate(alpha), 0.656);
-    if(alpha > 0.01)
-    {
-        float dlssAlpha = saturate(0.0113 + 1.6560 * alpha - 0.8210 * alpha * alpha + 0.1560 * alpha * alpha * alpha);
-        alpha = lerp(alpha, dlssAlpha, gDLSSCorrectionStrength);
-    }
+    float dlssAlpha = saturate(0.0113 + 1.6560 * alpha - 0.8210 * alpha * alpha + 0.1560 * alpha * alpha * alpha);
+    alpha = lerp(alpha, dlssAlpha, gDLSSCorrectionStrength);
     #endif
 
     #if DITHER_MODE == DITHER_MODE_DISABLED
@@ -205,6 +220,12 @@ float2 calcMotionVector(uint2 pixel, uint2 frameDim, TriangleHit triangleHit)
     return calcMotionVector(pixelPos, prevPosH, frameDim) + float2(gScene.camera.data.jitterX, -gScene.camera.data.jitterY); // Remove camera jitter from motion vector
 }
 
+float computeShadowImpl(uint2 pixel, uint lightIndex, float3 posW, float3 normalW)
+{
+    // posW + normal?
+    return traceShadowRay(posW, normalW, lightIndex);
+}
+
 [shader("closesthit")]
 void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAttributes attribs : SV_IntersectionAttributes){
     uint2 pixel = DispatchRaysIndex().xy;
@@ -215,9 +236,47 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
     triangleHit.primitiveIndex = PrimitiveIndex();
     triangleHit.barycentrics = attribs.barycentrics;
     
-    gVBuffer[pixel] = HitInfo(triangleHit).getData();
-    gMotion[pixel] = calcMotionVector(pixel, frameDim, triangleHit);
-    gOpacity[pixel] = rayData.minAlphaT <= RayTCurrent() ? 1.0 : 0.0;
+    if(useRussianRouletteForAlphaTest(rayData))
+    {
+        // accept as 100% opaque hit (due to russian roulette)
+        gVBuffer[pixel] = HitInfo(triangleHit).getData();
+        gMotion[pixel] = calcMotionVector(pixel, frameDim, triangleHit);
+        gOpacity[pixel] = rayData.minAlphaT <= RayTCurrent() ? 1.0 : 0.0;
+        return; // fast path if min visibility is not used
+    }
+
+    // lod
+    #if ALPHA_TEXTURE_LOD != 0
+    float2 ddx, ddy;
+    computeRayDifferentials(triangleHit, WorldRayDirection(), RayTCurrent(), gScene.camera, float2(frameDim), ddx, ddy);
+    let lod = ExplicitGradientTextureSampler(ddx, ddy);
+    #else
+    let lod = ExplicitLodTextureSampler(0.0);
+    #endif  
+
+    // eval alpha to decide wheter transparent hit or final vbuffer entry (opaque)
+    GeometryInstanceID instanceID = getGeometryInstanceID();
+    VertexData v = getVertexData(instanceID, PrimitiveIndex(), attribs);
+    uint materialID = gScene.getMaterialID(instanceID);
+    let material = gScene.materials.getMaterial(materialID);   
+    float alpha = material.evalOpacity(gScene.materials, v, lod);
+
+    float newVisibility = rayData.color.w * (1.0 - alpha);
+    if(newVisibility <= MIN_VISIBILITY)
+    {
+        // write to vbuffer (last entry)
+        rayData.color.w = rayData.color.w * alpha; // correct visibility to blend with the last object
+        // leave rayT as is, to stop ray
+        gVBuffer[pixel] = HitInfo(triangleHit).getData();
+        gMotion[pixel] = calcMotionVector(pixel, frameDim, triangleHit);
+        gOpacity[pixel] = rayData.minAlphaT <= RayTCurrent() ? 1.0 : 0.0;
+    }
+    else // full shading
+    {
+        rayData.color.rgb += rayData.color.w * alpha * shadeVBuffer(triangleHit, pixel, frameDim, -WorldRayDirection()).rgb;
+        rayData.rayT = RayTCurrent(); // continue ray here (if color.w > 0)
+        rayData.color.w = newVisibility;
+    }
 }
 
 [shader("raygeneration")]
@@ -230,8 +289,17 @@ void rayGen()
 
     RayData data;
     data.minAlphaT = ray.tMax; // no alpha encountered yet
+    data.color = float4(0, 0, 0, 1); // rbb+visibility
     uint rayFlags = 0;
     if (CULL_BACK_FACES) rayFlags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
-    // TraceRay(gScene.rtAccel, RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xff, 0, rayTypeCount, 0, ray.toRayDesc(), data);
-    TraceRay(gScene.rtAccel, rayFlags, 0xff, 0, rayTypeCount, 0, ray.toRayDesc(), data);
+
+    for(uint i = 0; i < 256; ++i)
+    {
+        data.rayT = ray.tMax; // overwrite with max t
+        TraceRay(gScene.rtAccel, rayFlags, 0xff, 0, rayTypeCount, 0, ray.toRayDesc(), data);
+        ray.tMin = data.rayT; // set ray t from hitpoint to new start
+        if(data.color.w <= MIN_VISIBILITY || ray.tMin >= ray.tMax) break;
+    }
+
+    gTransparent[pixel] = data.color;
 }

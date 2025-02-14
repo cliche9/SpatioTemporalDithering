@@ -147,7 +147,7 @@ private:
     ref<CPUSampleGenerator> mpSamplePattern;
     SamplePattern mSamplePattern = SamplePattern::Halton;
 
-    DitherMode mDitherMode = DitherMode::PerJitter;
+    DitherMode mDitherMode = DitherMode::HashGrid;
     bool mUseAlphaTextureLOD = false; // use lod for alpha lookups
     bool mUseTransparencyWhitelist = false;
     std::set<std::string> mTransparencyWhitelist;
@@ -160,8 +160,9 @@ private:
     ref<Sampler> mpFracSampler;
     ref<Texture> mpNoiseTex;
     ref<Sampler> mpNoiseSampler;
-    NoisePattern mNoisePattern = NoisePattern::White;
+    NoisePattern mNoisePattern = NoisePattern::Blue;
     bool mCullBackFaces = true;
+    float mMinVisibility = 1.0f;
 };
 
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherMode);

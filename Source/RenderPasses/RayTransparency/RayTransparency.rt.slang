@@ -170,12 +170,12 @@ void rayGen()
 
     RayData data;
     data.color = float4(0,0,0,1); // rgb+visibility
-    //TraceRay(gScene.rtAccel, RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xff, 0, rayTypeCount, 0, ray.toRayDesc(), data);
+    uint rayFlags = 0;
+    if (CULL_BACK_FACES) rayFlags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
+    
     for(uint i = 0; i < 256; ++i)
     {
         data.rayT = ray.tMax; // overwrite with max t
-        uint rayFlags = 0;
-        if (CULL_BACK_FACES) rayFlags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
         TraceRay(gScene.rtAccel, rayFlags, 0xff, 0, rayTypeCount, 0, ray.toRayDesc(), data);
         ray.tMin = data.rayT; // set ray t from hitpoint to new start
         if(data.color.w <= MIN_VISIBILITY || ray.tMin >= ray.tMax) break;

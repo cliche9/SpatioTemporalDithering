@@ -27,14 +27,17 @@
  **************************************************************************/
 #include "DitherVBuffer.h"
 #include "DitherLookup.h"
+#include "Scene/Lighting/LightSettings.h"
+#include "Scene/Lighting/ShadowSettings.h"
 
 namespace
 {
     const std::string kVbuffer = "vbuffer";
     const std::string kMotion = "mvec";
     const std::string kOpacity = "opacity";
+    const std::string kTransparentColor = "transparent";
 
-    const uint32_t kMaxPayloadSizeBytes = 4; 
+    const uint32_t kMaxPayloadSizeBytes = 6 * sizeof(float); 
     const std::string kProgramRaytraceFile = "RenderPasses/DitherVBuffer/DitherVBuffer.rt.slang";
 
     const std::string kUseWhitelist = "useWhitelist";
@@ -98,6 +101,7 @@ RenderPassReflection DitherVBuffer::reflect(const CompileData& compileData)
     reflector.addOutput(kVbuffer, "V-buffer").format(HitInfo::kDefaultFormat);
     reflector.addOutput(kMotion, "Motion vector").format(ResourceFormat::RG32Float).flags(RenderPassReflection::Field::Flags::Optional);
     reflector.addOutput(kOpacity, "Opacity Mask (1 = any transparent)").format(ResourceFormat::R8Unorm).flags(RenderPassReflection::Field::Flags::Optional);
+    reflector.addOutput(kTransparentColor, "Transparent Color (RGB+visibility)").format(ResourceFormat::RGBA16Float);
     return reflector;
 }
 
@@ -110,6 +114,7 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     auto pVbuffer = renderData.getTexture(kVbuffer);
     auto pMotion = renderData.getTexture(kMotion);
     auto pOpacity = renderData.getTexture(kOpacity);
+    auto pTransparent = renderData.getTexture(kTransparentColor);
 
     uint2 frameDim = uint2(pVbuffer->getWidth(), pVbuffer->getHeight());
     mpScene->getCamera()->setPatternGenerator(mpSamplePattern, 1.0f / float2(frameDim));
@@ -118,6 +123,7 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["gVBuffer"] = pVbuffer;
     var["gMotion"] = pMotion;
     var["gOpacity"] = pOpacity;
+    var["gTransparent"] = pTransparent;
     var["gStratifiedIndices"] = mpStratifiedIndices;
     var["gStratifiedLookUpTable"] = mpStratifiedLookUpBuffer;
     var["gDitherTex"] = mpFracDitherTex;
@@ -131,15 +137,20 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["PerFrame"]["gSampleCount"] = mpSamplePattern->getSampleCount();
     var["PerFrame"]["gSampleIndex"] = mFrameCount % std::max(1u, mpSamplePattern->getSampleCount());//mpSamplePattern->getCurSample();
     var["PerFrame"]["gDLSSCorrectionStrength"] = mDLSSCorrectionStrength;
+    var["PerFrame"]["gMinVisibility"] = mMinVisibility;
 
     var["DitherConstants"]["gGridScale"] = mGridScale;
     var["DitherConstants"]["gNoiseScale"] = float2(1.0f / mpNoiseTex->getWidth(), 1.0f / mpNoiseTex->getHeight());
+
+    LightSettings::get().updateShaderVar(var);
+    ShadowSettings::get().updateShaderVar(mpDevice, var);
 
     mpProgram->addDefine("COVERAGE_CORRECTION", std::to_string(uint32_t(mCoverageCorrection)));
     mpProgram->addDefine("TRANSPARENCY_WHITELIST", mUseTransparencyWhitelist ? "1" : "0");
     mpProgram->addDefine("DITHER_MODE", std::to_string(uint32_t(mDitherMode)));
     mpProgram->addDefine("ALPHA_TEXTURE_LOD", mUseAlphaTextureLOD ? "1" : "0");
     mpProgram->addDefine("CULL_BACK_FACES", mCullBackFaces ? "1" : "0");
+    mpProgram->addDefines(ShadowSettings::get().getShaderDefines(*mpScene, renderData.getDefaultTextureDims()));
 
     uint3 dispatch = uint3(1);
     dispatch.x = pVbuffer->getWidth();
@@ -149,6 +160,8 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
 
 void DitherVBuffer::renderUI(Gui::Widgets& widget)
 {
+    widget.slider("Dither Threshold", mMinVisibility, 0.0f, 1.0f);
+
     auto sampleCount = mpSamplePattern->getSampleCount();
     if(widget.dropdown("Sample Pattern", mSamplePattern))
     {
