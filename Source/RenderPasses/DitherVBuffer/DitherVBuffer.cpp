@@ -360,6 +360,13 @@ void DitherVBuffer::createNoisePattern()
     case NoisePattern::Blue:
         texname = "dither/bluenoise1024.dds";
         break;
+    case NoisePattern::Bayer:
+        texname = "dither/bayer_matrix.dds";
+        break;
+    case NoisePattern::BlueBayer:
+        texname = "dither/blue_bayer.dds";
+    default:
+        assert(false);
     }
 
     mpNoiseTex = Texture::createFromFile(mpDevice, texname, false, false);

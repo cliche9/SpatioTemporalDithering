@@ -103,11 +103,15 @@ public:
     {
         White,
         Blue,
+        Bayer,
+        BlueBayer,
     };
 
     FALCOR_ENUM_INFO(NoisePattern, {
         {NoisePattern::White, "White"},
         {NoisePattern::Blue, "Blue"},
+        {NoisePattern::Bayer, "Bayer"},
+        {NoisePattern::BlueBayer, "BlueBayer"},
     });
 
     FALCOR_PLUGIN_CLASS(DitherVBuffer, "DitherVBuffer", "VBuffer with Dithering options for transparency");
