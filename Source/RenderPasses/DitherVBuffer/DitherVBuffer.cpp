@@ -369,6 +369,9 @@ void DitherVBuffer::createNoisePattern()
     case NoisePattern::Poisson:
         texname = "dither/poisson1024.dds";
         break;
+    case NoisePattern::Perlin:
+        texname = "dither/perlin1024.dds";
+        break;
     default:
         assert(false);
     }
