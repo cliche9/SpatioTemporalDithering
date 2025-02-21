@@ -33,6 +33,8 @@ cbuffer DitherConstants
 {
     float2 gNoiseScale; // inverse resolution for noise texture
     float gGridScale;
+    int gRotatePattern;
+    int gAddNoiseOnPattern;
 };
 
 static const int4x4 ditherMatrix = int4x4(
@@ -475,12 +477,33 @@ bool isCovered(uint2 pixel, float alpha, uint sampleIndex, uint sampleCount, uin
     return false;
 }
 
-float getPixelDitherThreshold(uint2 pixel, uint objectOffet)
+// Helper function to extract bits at even positions for x or odd positions for y
+uint CompactBits(uint n) {
+    // Masks and shifts to compact bits from a Morton code
+    n &= 0x55555555;              // Mask: 0b01010101...
+    n = (n ^ (n >> 1)) & 0x33333333;  // Mask and compact pairs
+    n = (n ^ (n >> 2)) & 0x0F0F0F0F;  // Compact nibbles
+    n = (n ^ (n >> 4)) & 0x00FF00FF;  // Compact bytes
+    n = (n ^ (n >> 8)) & 0x0000FFFF;  // Compact words
+    return n;
+}
+
+// Converts a Morton code uint into a uint2 (x, y) position along the Z-order curve
+uint2 DecodeMorton2D(uint morton) {
+    uint x = CompactBits(morton);           // Extract even bits for x
+    uint y = CompactBits(morton >> 1);      // Extract odd bits for y
+    return uint2(x, y);
+}
+
+
+float getPixelDitherThreshold(uint2 pixel, uint objectOffet, float3 posW, uint frameIndex)
 {
-    uint randomOffset = uint(hash3D(float3(InstanceID(), GeometryIndex(), PrimitiveIndex() / 2u)) * 7919);
+    uint randomOffset = uint(hash3D(float3(InstanceID(), GeometryIndex(), HitKind() == HIT_KIND_TRIANGLE_FRONT_FACE)) * 7919);
     //if (objectOffset <= 4) randomOffset = objectOffset;
+
     // use random offset to ensure that each primitive uses a different mask
     #if DITHER_MODE == DITHER_MODE_PER_PIXEL_4X
+    if(gRotatePattern) randomOffset += frameIndex; // rotate lookup based on frame index
     pixel.x += randomOffset % 2u;
     pixel.y += randomOffset / 2u;
     pixel = pixel % 2u;
@@ -488,8 +511,11 @@ float getPixelDitherThreshold(uint2 pixel, uint objectOffet)
         float2(0.0, 2.0),
         float2(3.0, 1.0)
     );
-    return (ditherMatrix[pixel.y][pixel.x] + 0.5) / 4.0;
+    float divisor = 4.0;
+    float ditherThreshold = ditherMatrix[pixel.y][pixel.x];
     #else // assume 16 x
+    if(gRotatePattern) randomOffset += frameIndex; // rotate lookup based on frame index
+    //if(gRotatePattern) pixel += DecodeMorton2D(frameIndex);
     pixel.x += randomOffset % 4u;
     pixel.y += randomOffset / 4u;
     pixel = pixel % 4u;
@@ -499,8 +525,17 @@ float getPixelDitherThreshold(uint2 pixel, uint objectOffet)
         float4(3.0, 11.0, 1.0, 9.0),
         float4(15.0, 7.0, 13.0, 5.0)
     );
-    return (ditherMatrix[pixel.y][pixel.x] + 0.5) / 16.0;
+    float divisor = 16.0;
+    float ditherThreshold = ditherMatrix[pixel.y][pixel.x];
     #endif
+
+    if(gAddNoiseOnPattern) 
+    {
+        ditherThreshold += hash4D(float4(posW, frameIndex));
+    } 
+    else ditherThreshold += 0.5;
+
+    return ditherThreshold / divisor;
 }
 
 float getPixelDitherThresholdPlusRoulette(uint2 pixel, uint frameIndex, float3 posW, uint objectOffset)
@@ -512,13 +547,17 @@ float getPixelDitherThresholdPlusRoulette(uint2 pixel, uint frameIndex, float3 p
 
     uint4 mask = get2x2Permutation(randomOffset); // mask with [0, 1, 2, 3] permutation
     uint lookup = (pixel.x % 2u) + 2u * (pixel.y % 2u);
-    lookup = (lookup + frameIndex) % 4u; // rotate lookup based on frame index
+    if(gRotatePattern) lookup = (lookup + frameIndex) % 4u; // rotate lookup based on frame index
     uint v = mask[lookup]; // 0, 1, 2 or 3
     
     float ditherThreshold = v / 4.0;
-    //ditherThreshold += 0.125;
-    ditherThreshold += hash4D(float4(posW, frameIndex)) * 0.25;
-    //ditherThreshold += ((frameIndex * odds[oddPixel.x][oddPixel.y]) % 8u) / 8.0 * 0.25;
+    if(gAddNoiseOnPattern) 
+    {
+        ditherThreshold += hash4D(float4(posW, frameIndex)) * 0.25;
+        //ditherThreshold += ((frameIndex * odds[oddPixel.x][oddPixel.y]) % 8u) / 8.0 * 0.25;
+    } 
+    else ditherThreshold += 0.125;
+    
     return ditherThreshold;
 }
 
@@ -526,7 +565,7 @@ float getPixelDitherThresholdPlusRoulette3x3(uint2 pixel, uint frameIndex, float
 {
     // use random offset to ensure that each primitive uses a different mask
     uint randomOffset = uint(hash3D(float3(InstanceID(), GeometryIndex(), HitKind() == HIT_KIND_TRIANGLE_FRONT_FACE)) * 7919);
-    randomOffset += frameIndex; // rotate lookup based on frame index
+    if(gRotatePattern) randomOffset += frameIndex; // rotate lookup based on frame index
     pixel.x += randomOffset % 3u;
     pixel.y += randomOffset / 3u;
     pixel = pixel % 3u;
@@ -540,8 +579,11 @@ float getPixelDitherThresholdPlusRoulette3x3(uint2 pixel, uint frameIndex, float
     uint v = mask[pixel.x][pixel.y]; // 0-8
     
     float ditherThreshold = v / 9.0;
-    //ditherThreshold += 0.125;
-    ditherThreshold += hash4D(float4(posW, frameIndex)) * 0.11;
-    //ditherThreshold += ((frameIndex * odds[oddPixel.x][oddPixel.y]) % 8u) / 8.0 * 0.25;
+    if(gAddNoiseOnPattern) 
+    {
+        ditherThreshold += hash4D(float4(posW, frameIndex)) / 9.0;
+    } 
+    else ditherThreshold += 1.0 / 18.0;
+    
     return ditherThreshold;
 }

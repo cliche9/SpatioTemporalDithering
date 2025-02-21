@@ -227,7 +227,7 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     
     #endif
     #if (DITHER_MODE == DITHER_MODE_PER_PIXEL_4X) || (DITHER_MODE == DITHER_MODE_PER_PIXEL_16X)
-    if (alpha < getPixelDitherThreshold(pixel, rayData.anyCount))
+    if (alpha < getPixelDitherThreshold(pixel, rayData.anyCount, v.posW, gFrameCount))
         IgnoreHit();
     #endif
     #if (DITHER_MODE == DITHER_PER_PIXEL_4X_ROULETTE)

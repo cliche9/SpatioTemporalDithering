@@ -165,8 +165,8 @@ private:
     bool mUseAlphaTextureLOD = false; // use lod for alpha lookups
     bool mUseTransparencyWhitelist = false;
     std::set<std::string> mTransparencyWhitelist;
-    CoverageCorrection mCoverageCorrection = CoverageCorrection::Disabled;
-    float mDLSSCorrectionStrength = 1.0;
+    CoverageCorrection mCoverageCorrection = CoverageCorrection::DLSS;
+    float mDLSSCorrectionStrength = 0.5;
     DitherPattern mFractalDitherPattern = DitherPattern::Dither8x8;
     float mGridScale = 0.25f;
 
@@ -179,6 +179,8 @@ private:
     bool mCullBackFaces = false;
     float mMinVisibility = 1.0f;
     bool mAlignMotionVectors = true; // align when using pixel grid techniques
+    bool mRotatePattern = true; // rotate pattern when using pixel grid techniques
+    bool mAddNoiseOnPattern = true; // adds additional noise on the threshold to prevent banding
 };
 
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherMode);

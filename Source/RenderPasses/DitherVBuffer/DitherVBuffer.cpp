@@ -144,6 +144,8 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
 
     var["DitherConstants"]["gGridScale"] = mGridScale;
     var["DitherConstants"]["gNoiseScale"] = float2(1.0f / mpNoiseTex->getWidth(), 1.0f / mpNoiseTex->getHeight());
+    var["DitherConstants"]["gRotatePattern"] = mRotatePattern ? 1 : 0;
+    var["DitherConstants"]["gAddNoiseOnPattern"] = mAddNoiseOnPattern ? 1 : 0;
 
     LightSettings::get().updateShaderVar(var);
     ShadowSettings::get().updateShaderVar(mpDevice, var);
@@ -201,6 +203,9 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
     {
         widget.checkbox("Align Motion Vector", mAlignMotionVectors);
         widget.tooltip("Align motion vector to grid size to prevent issues when moving camera");
+        widget.checkbox("Rotate Pattern", mRotatePattern);
+        widget.tooltip("Rotates the per-pixel dither pattern based on the frame index");
+        widget.checkbox("Noise on Pattern", mAddNoiseOnPattern);
     }
 
     widget.checkbox("Alpha Texture LOD", mUseAlphaTextureLOD);
