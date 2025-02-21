@@ -229,10 +229,7 @@ void DitherVBuffer::setScene(RenderContext* pRenderContext, const ref<Scene>& pS
 {
     mpScene = pScene;
     setupProgram();
-    if(!updateWhitelistBuffer())
-    {
-        mUseTransparencyWhitelist = false; // disable whitelist since nothing is whitelisted (might confuse people when loading in custom scenes)
-    }
+    mUseTransparencyWhitelist = updateWhitelistBuffer();
 }
 
 void DitherVBuffer::setFractalDitherPattern(DitherPattern pattern)

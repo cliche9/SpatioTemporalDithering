@@ -174,7 +174,7 @@ private:
     ref<Texture> mpNoiseTex;
     ref<Sampler> mpNoiseSampler;
     NoisePattern mNoisePattern = NoisePattern::Blue;
-    bool mCullBackFaces = true;
+    bool mCullBackFaces = false;
     float mMinVisibility = 1.0f;
 };
 

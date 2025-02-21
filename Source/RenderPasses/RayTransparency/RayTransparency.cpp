@@ -162,7 +162,7 @@ void RayTransparency::setScene(RenderContext* pRenderContext, const ref<Scene>& 
 {
     mpScene = pScene;
     setupProgram();
-    updateWhitelistBuffer();
+    mUseTransparencyWhitelist = updateWhitelistBuffer();
 }
 
 void RayTransparency::setupProgram()
