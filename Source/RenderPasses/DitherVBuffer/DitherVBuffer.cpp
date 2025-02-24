@@ -28,6 +28,7 @@
 #include "DitherVBuffer.h"
 #include "DitherLookup.h"
 #include "MidpointGenerator.h"
+#include "PermutationLookup.h"
 #include "Scene/Lighting/LightSettings.h"
 #include "Scene/Lighting/ShadowSettings.h"
 
@@ -65,6 +66,8 @@ DitherVBuffer::DitherVBuffer(ref<Device> pDevice, const Properties& props)
     sd.setFilterMode(Sampler::Filter::Point, Sampler::Filter::Point, Sampler::Filter::Point);
     sd.setAddressingMode(Sampler::AddressMode::Wrap, Sampler::AddressMode::Wrap, Sampler::AddressMode::Wrap);
     mpNoiseSampler = Sampler::create(mpDevice, sd);
+
+    generatePermutations<3>();
 
     // load properties
     for (const auto& [key, value] : props)

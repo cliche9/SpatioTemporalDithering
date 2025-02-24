@@ -8,6 +8,7 @@ target_sources(DitherVBuffer PRIVATE
     DitherLookup.h
     SobolGenerator.h
     MidpointGenerator.h
+    PermutationLookup.h
 )
 
 target_copy_shaders(DitherVBuffer RenderPasses/DitherVBuffer)
