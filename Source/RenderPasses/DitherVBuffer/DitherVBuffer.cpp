@@ -67,7 +67,8 @@ DitherVBuffer::DitherVBuffer(ref<Device> pDevice, const Properties& props)
     sd.setAddressingMode(Sampler::AddressMode::Wrap, Sampler::AddressMode::Wrap, Sampler::AddressMode::Wrap);
     mpNoiseSampler = Sampler::create(mpDevice, sd);
 
-    generatePermutations<3>();
+    //generatePermutations<3>();
+    mpPermutations3x3Buffer = generatePermutations3x3(mpDevice);
 
     // load properties
     for (const auto& [key, value] : props)
@@ -137,6 +138,7 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["gNoiseSampler"] = mpNoiseSampler;
     assert(mpTransparencyWhitelist);
     var["gTransparencyWhitelist"] = mpTransparencyWhitelist;
+    var["gPermutations3x3"] = mpPermutations3x3Buffer;
 
     var["PerFrame"]["gFrameCount"] = mFrameCount++;
     var["PerFrame"]["gSampleCount"] = mpSamplePattern->getSampleCount();

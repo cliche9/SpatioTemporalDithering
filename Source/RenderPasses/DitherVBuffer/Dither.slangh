@@ -29,6 +29,8 @@ SamplerState gDitherSampler;
 Texture2D<float> gNoiseTex;
 SamplerState gNoiseSampler;
 
+StructuredBuffer<uint> gPermutations3x3; // permutations packed into 4 bytes
+
 cbuffer DitherConstants
 {
     float2 gNoiseScale; // inverse resolution for noise texture
@@ -43,6 +45,29 @@ static const int4x4 ditherMatrix = int4x4(
         float4(3, 11, 1, 9),
         float4(15, 7, 13, 5)
     );
+
+
+uint3x3 get3x3Permutation(uint id)
+{
+    uint elementCount, stride;
+    gPermutations3x3.GetDimensions(elementCount, stride);
+    uint packed = gPermutations3x3[id % elementCount];
+    uint3x3 m;
+    uint sumValues = 0; // To track the sum of the extracted values
+
+    // Extract the first 8 values (4 bits each)
+    [unroll] for (int i = 0; i < 8; i++)
+    {
+        uint value = (packed >> (i * 4)) & 0xF;
+        m[i / 3][i % 3] = value;
+        sumValues += value;
+    }
+
+    // Compute the missing value using sum formula (0+1+2+3+4+5+6+7+8 = 36)
+    m[2][2] = 36 - sumValues;
+
+    return m;
+}
 
 
 uint4 get2x2Permutation(uint i) {
@@ -565,18 +590,19 @@ float getPixelDitherThresholdPlusRoulette3x3(uint2 pixel, uint frameIndex, float
 {
     // use random offset to ensure that each primitive uses a different mask
     uint randomOffset = uint(hash3D(float3(InstanceID(), GeometryIndex(), HitKind() == HIT_KIND_TRIANGLE_FRONT_FACE)) * 7919);
-    if(gRotatePattern) randomOffset += frameIndex; // rotate lookup based on frame index
-    pixel.x += randomOffset % 3u;
-    pixel.y += randomOffset / 3u;
+    if(gRotatePattern)
+    {
+        pixel.x += frameIndex % 3;
+        pixel.y += frameIndex / 3;
+    }
+    //if(gRotatePattern) randomOffset += frameIndex; // rotate lookup based on frame index
+    //pixel.x += randomOffset % 3u;
+    //pixel.y += randomOffset / 3u;
     pixel = pixel % 3u;
 
-    uint3x3 mask = uint3x3(
-        uint3(0, 7, 3),
-        uint3(6, 5, 2),
-        uint3(4, 1, 8)
-    );
-
-    uint v = mask[pixel.x][pixel.y]; // 0-8
+    //uint3x3 mask = uint3x3(uint3(0, 7, 3), uint3(6, 5, 2), uint3(4, 1, 8));
+    uint3x3 mask = get3x3Permutation(randomOffset);
+    uint v = mask[pixel.y][pixel.x]; // 0-8
     
     float ditherThreshold = v / 9.0;
     if(gAddNoiseOnPattern) 

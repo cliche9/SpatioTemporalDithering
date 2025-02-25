@@ -60,10 +60,27 @@ inline std::vector<std::array<int, T* T>> generateBestPermutations(size_t maxRes
     for (size_t i = 0; i < std::min(maxResults, scoredPermutations.size()); ++i) {
         bestPermutations.push_back(scoredPermutations[i].second);
     }
-    std::cerr << "Max Inverse Dist" << invDistMax << std::endl;
-    std::cerr << "Max Sum" << sumMax << std::endl;
 
     return bestPermutations;
+}
+
+// Function to pack 8 values (0-8) into a single uint32_t using 4 bits per value
+inline uint32_t packPermutation(const std::array<int, 9>& indices) {
+    uint32_t packed = 0;
+    for (size_t i = 0; i < 8; ++i) {
+        packed |= (indices[i] & 0xF) << (i * 4);
+    }
+    return packed;
+}
+
+inline ref<Buffer> generatePermutations3x3(ref<Device> pDevice)
+{
+    auto perms = generateBestPermutations<3>(256);
+
+    std::vector<uint32_t> packed(perms.size());
+    std::transform(perms.begin(), perms.end(), packed.begin(), packPermutation);
+
+    return Buffer::createStructured(pDevice, sizeof(packed[0]), packed.size(), ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, packed.data(), false);
 }
 
 template<int T>

@@ -155,6 +155,7 @@ private:
     ref<Buffer> mpStratifiedIndices;
     ref<Buffer> mpStratifiedLookUpBuffer;
     ref<Buffer> mpTransparencyWhitelist;
+    ref<Buffer> mpPermutations3x3Buffer;
 
     uint mFrameCount = 0;
 
