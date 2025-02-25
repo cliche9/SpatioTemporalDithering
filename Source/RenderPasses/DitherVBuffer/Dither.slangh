@@ -122,7 +122,7 @@ uint spatialHash(float4 v)
     return spatialHash(asuint(v));
 }
 
-float GPURnd(inout float4 state)
+float GPURnd(float4 state)
 {
     const float4 q = float4(1225.0, 1585.0, 2457.0, 2098.0);
     const float4 r = float4(1112.0, 367.0, 92.0, 265.0);
@@ -447,6 +447,8 @@ bool winRoulette(float alpha, uint frameIndex, float3 posW)
     // quantize posW
     //posW = floor(posW * 1000.0) / 1000.0;
     float rng = hash4D(float4(posW, frameIndex));
+    //float rng = GPURnd(float4(posW, frameIndex));
+    //float rng = (spatialHash(float4(posW, frameIndex)) % 999331u) / 999331.0;
     if(rng > alpha) return false;
     return true;
 }
@@ -590,8 +592,8 @@ float getPixelDitherThreshold(uint2 pixel, uint objectOffet, float3 posW, uint f
 float getPixelDitherThresholdPlusRoulette(uint2 pixel, uint frameIndex, float3 posW, uint objectOffset)
 {
     // use random offset to ensure that each primitive uses a different mask
-    uint randomOffset = uint(hash3D(float3(InstanceID(), GeometryIndex(), PrimitiveIndex() / 2u)) * 7919);
-    //uint randomOffset = uint(hash3D(float3(InstanceID(), GeometryIndex(), HitKind() == HIT_KIND_TRIANGLE_FRONT_FACE)) * 7919);
+    //uint randomOffset = uint(hash3D(float3(InstanceID(), GeometryIndex(), PrimitiveIndex() / 2u)) * 7919);
+    uint randomOffset = uint(hash3D(float3(InstanceID(), GeometryIndex(), HitKind() == HIT_KIND_TRIANGLE_FRONT_FACE)) * 7919);
     //if (objectOffset <= 4) randomOffset = objectOffset;
 
     uint4 mask = get2x2Permutation(randomOffset); // mask with [0, 1, 2, 3] permutation
@@ -613,8 +615,8 @@ float getPixelDitherThresholdPlusRoulette(uint2 pixel, uint frameIndex, float3 p
 float getPixelDitherThresholdPlusRoulette3x3(uint2 pixel, uint frameIndex, float3 posW, uint objectOffset)
 {
     // use random offset to ensure that each primitive uses a different mask
-    //uint randomOffset = uint(hash3D(float3(InstanceID(), GeometryIndex(), HitKind() == HIT_KIND_TRIANGLE_FRONT_FACE)) * 7919);
-    uint randomOffset = uint(hash3D(float3(InstanceID(), GeometryIndex(), PrimitiveIndex() / 2u)) * 7919);
+    uint randomOffset = uint(hash3D(float3(InstanceID(), GeometryIndex(), HitKind() == HIT_KIND_TRIANGLE_FRONT_FACE)) * 7919);
+    //uint randomOffset = uint(hash3D(float3(InstanceID(), GeometryIndex(), PrimitiveIndex() / 2u)) * 7919);
     if(gRotatePattern)
     {
         pixel.x += frameIndex % 3;

@@ -167,7 +167,7 @@ private:
     bool mUseTransparencyWhitelist = false;
     std::set<std::string> mTransparencyWhitelist;
     CoverageCorrection mCoverageCorrection = CoverageCorrection::DLSS;
-    float mDLSSCorrectionStrength = 0.5;
+    float mDLSSCorrectionStrength = 1.0;
     DitherPattern mFractalDitherPattern = DitherPattern::Dither8x8;
     float mGridScale = 0.25f;
 

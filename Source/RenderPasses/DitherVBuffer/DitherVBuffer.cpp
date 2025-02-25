@@ -218,7 +218,7 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
     widget.dropdown("Coverage Correction", mCoverageCorrection);
     if (mCoverageCorrection == CoverageCorrection::DLSS)
     {
-        widget.slider("DLSS Correction Strength", mDLSSCorrectionStrength, 0.0f, 1.0f);
+        widget.slider("DLSS Correction Strength", mDLSSCorrectionStrength, 0.0f, 4.0f);
     }
 
     widget.checkbox("Transparency Whitelist", mUseTransparencyWhitelist);

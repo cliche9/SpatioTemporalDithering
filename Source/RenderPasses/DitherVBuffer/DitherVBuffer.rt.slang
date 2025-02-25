@@ -220,7 +220,7 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
 
     #if COVERAGE_CORRECTION == COVERAGE_CORRECTION_DLSS
     float dlssAlpha = saturate(0.0113 + 1.6560 * alpha - 0.8210 * alpha * alpha + 0.1560 * alpha * alpha * alpha);
-    alpha = lerp(alpha, dlssAlpha, gDLSSCorrectionStrength * 4.0);
+    alpha = lerp(alpha, dlssAlpha, gDLSSCorrectionStrength);
     #endif
 
     #if DITHER_MODE == DITHER_MODE_DISABLED
