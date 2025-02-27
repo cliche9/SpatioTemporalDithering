@@ -99,14 +99,21 @@ void FSR::compile(RenderContext* pRenderContext, const CompileData& compileData)
     if(ret != ffx::ReturnCode::Ok)
         throw std::runtime_error("Failed to create FFX context");
 
-    FfxApiEffectMemoryUsage gpuMemoryUsageUpscaler;
-    ffx::QueryDescUpscaleGetGPUMemoryUsage upscalerGetGPUMemoryUsage{};
-    upscalerGetGPUMemoryUsage.gpuMemoryUsageUpscaler = &gpuMemoryUsageUpscaler;
+    // Query version of fsr for display
+    ffx::QueryDescGetVersions versionQuery{};
+    versionQuery.createDescType = contextDesc.header.type;
+    versionQuery.device = pNative; // only for DirectX 12 applications
+    uint64_t versionCount = 0;
+    versionQuery.outputCount = &versionCount;
+    // get number of versions for allocation
+    ffxQuery(nullptr, &versionQuery.header);
+    if (!versionCount) return; // failed?
 
-    ffx::Query(mContext, upscalerGetGPUMemoryUsage);
-    std::cerr << "FSR: Upscaler Context VRAM totalUsageInBytes " << gpuMemoryUsageUpscaler.totalUsageInBytes / 1048576.f << " MB" << std::endl;
-    std::cerr << "                       aliasableUsageInBytes " << gpuMemoryUsageUpscaler.aliasableUsageInBytes / 1048576.f << " MB" << std::endl;
-
+    std::vector<const char*> versionNames;
+    versionNames.resize(versionCount);
+    versionQuery.versionNames = versionNames.data();
+    ffxQuery(nullptr, &versionQuery.header);
+    std::cerr << "FSR: Upscaler Context version " << versionNames[0] << std::endl;
 }
 
 static FfxApiResource ffxGetResourceApi(RenderContext* pRenderContext, Texture* pTexture)
