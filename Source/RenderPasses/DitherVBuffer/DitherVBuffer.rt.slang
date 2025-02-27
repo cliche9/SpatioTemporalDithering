@@ -40,7 +40,7 @@ StructuredBuffer<uint> gTransparencyWhitelist;
 RWTexture2D<PackedHitInfo> gVBuffer;
 RWTexture2D<float2> gMotion;
 RWTexture2D<float> gOpacity; // mask for TAA
-RWTexture2D<float4> gTransparent; // rgba transparent color
+RWTexture2D<float4> gColor; // shaded vbuffer
 
 struct RayData
 {
@@ -159,12 +159,15 @@ void miss(inout RayData rayData : SV_RayPayload)
     uint2 frameDim = DispatchRaysDimensions().xy;
 
     HitInfo hitInfo = { };
-    gVBuffer[pixel] = hitInfo.getData();
     float3 rayDirNoJitter = gScene.camera.computeRayPinhole(pixel, frameDim, /*no jitter*/false).dir;
     float3 prevEnvMapDir = mul(gScene.camera.data.prevViewMat, float4(rayDirNoJitter, 0.0)).xyz;
     float2 prevUV = ViewSpaceToUV(prevEnvMapDir);
+    gVBuffer[pixel] = hitInfo.getData();
     gMotion[pixel] = getAlignedMotionVector(prevUV - (float2(pixel)+0.5) / float2(frameDim), rayData.minAlphaT <= RayTCurrent());
     gOpacity[pixel] = rayData.minAlphaT < RayTCurrent() ? 1.0 : 0.0;
+
+    rayData.color.rgb += rayData.color.w * shadeEnvmap(-WorldRayDirection()).rgb;
+    rayData.color.w = 0.0;
 }
 
 bool useRussianRouletteForAlphaTest(RayData rayData)
@@ -304,47 +307,37 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
     triangleHit.instanceID = getGeometryInstanceID();
     triangleHit.primitiveIndex = PrimitiveIndex();
     triangleHit.barycentrics = attribs.barycentrics;
-    
-    if(useRussianRouletteForAlphaTest(rayData))
+   
+    float alpha = 1.0; // default value when using russian roulette
+    if(!useRussianRouletteForAlphaTest(rayData))
     {
-        // accept as 100% opaque hit (due to russian roulette)
-        gVBuffer[pixel] = HitInfo(triangleHit).getData();
-        gMotion[pixel] = calcMotionVector(pixel, frameDim, triangleHit, rayData.minAlphaT <= RayTCurrent());
-        gOpacity[pixel] = rayData.minAlphaT <= RayTCurrent() ? 1.0 : 0.0;
-        return; // fast path if min visibility is not used
+        // lod
+        #if ALPHA_TEXTURE_LOD != 0
+        float2 ddx, ddy;
+        computeRayDifferentials(triangleHit, WorldRayDirection(), RayTCurrent(), gScene.camera, float2(frameDim), ddx, ddy);
+        let lod = ExplicitGradientTextureSampler(ddx, ddy);
+        #else
+        let lod = ExplicitLodTextureSampler(0.0);
+        #endif  
+
+        // eval alpha to decide wheter transparent hit or final vbuffer entry (opaque)
+        GeometryInstanceID instanceID = getGeometryInstanceID();
+        VertexData v = getVertexData(instanceID, PrimitiveIndex(), attribs);
+        uint materialID = gScene.getMaterialID(instanceID);
+        let material = gScene.materials.getMaterial(materialID);   
+        alpha = material.evalOpacity(gScene.materials, v, lod);
     }
 
-    // lod
-    #if ALPHA_TEXTURE_LOD != 0
-    float2 ddx, ddy;
-    computeRayDifferentials(triangleHit, WorldRayDirection(), RayTCurrent(), gScene.camera, float2(frameDim), ddx, ddy);
-    let lod = ExplicitGradientTextureSampler(ddx, ddy);
-    #else
-    let lod = ExplicitLodTextureSampler(0.0);
-    #endif  
+    rayData.color.rgb += rayData.color.w * alpha * shadeVBuffer(triangleHit, pixel, frameDim, -WorldRayDirection()).rgb;
+    rayData.color.w = rayData.color.w * (1.0 - alpha);
+    rayData.rayT = RayTCurrent(); // continue ray here (if color.w > 0)
 
-    // eval alpha to decide wheter transparent hit or final vbuffer entry (opaque)
-    GeometryInstanceID instanceID = getGeometryInstanceID();
-    VertexData v = getVertexData(instanceID, PrimitiveIndex(), attribs);
-    uint materialID = gScene.getMaterialID(instanceID);
-    let material = gScene.materials.getMaterial(materialID);   
-    float alpha = material.evalOpacity(gScene.materials, v, lod);
-
-    float newVisibility = rayData.color.w * (1.0 - alpha);
-    if(newVisibility <= MIN_VISIBILITY)
+    if(rayData.color.w <= MIN_VISIBILITY)
     {
         // write to vbuffer (last entry)
-        rayData.color.w = rayData.color.w * alpha; // correct visibility to blend with the last object
-        // leave rayT as is, to stop ray
         gVBuffer[pixel] = HitInfo(triangleHit).getData();
         gMotion[pixel] = calcMotionVector(pixel, frameDim, triangleHit, rayData.minAlphaT <= RayTCurrent());
         gOpacity[pixel] = rayData.minAlphaT <= RayTCurrent() ? 1.0 : 0.0;
-    }
-    else // full shading
-    {
-        rayData.color.rgb += rayData.color.w * alpha * shadeVBuffer(triangleHit, pixel, frameDim, -WorldRayDirection()).rgb;
-        rayData.rayT = RayTCurrent(); // continue ray here (if color.w > 0)
-        rayData.color.w = newVisibility;
     }
 }
 
@@ -371,5 +364,5 @@ void rayGen()
         if(data.color.w <= MIN_VISIBILITY || ray.tMin >= ray.tMax) break;
     }
 
-    gTransparent[pixel] = data.color;
+    gColor[pixel] = data.color;
 }

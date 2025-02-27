@@ -38,6 +38,7 @@ namespace
     const std::string kMotion = "mvec";
     const std::string kOpacity = "opacity";
     const std::string kTransparentColor = "transparent";
+    const std::string kColorOut = "color";
 
     const uint32_t kMaxPayloadSizeBytes = 7 * sizeof(float); 
     const std::string kProgramRaytraceFile = "RenderPasses/DitherVBuffer/DitherVBuffer.rt.slang";
@@ -107,19 +108,25 @@ RenderPassReflection DitherVBuffer::reflect(const CompileData& compileData)
     reflector.addOutput(kMotion, "Motion vector").format(ResourceFormat::RG32Float).flags(RenderPassReflection::Field::Flags::Optional);
     reflector.addOutput(kOpacity, "Opacity Mask (1 = any transparent)").format(ResourceFormat::R8Unorm).flags(RenderPassReflection::Field::Flags::Optional);
     reflector.addOutput(kTransparentColor, "Transparent Color (RGB+visibility)").format(ResourceFormat::RGBA16Float);
+    reflector.addOutput(kColorOut, "Final color").format(ResourceFormat::RGBA32Float).bindFlags(ResourceBindFlags::AllColorViews);
     return reflector;
 }
 
 void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& renderData)
 {
-    if (!mpScene) return;
-    assert(mpProgram);
-    assert(mpVars);
-
     auto pVbuffer = renderData.getTexture(kVbuffer);
     auto pMotion = renderData.getTexture(kMotion);
     auto pOpacity = renderData.getTexture(kOpacity);
-    auto pTransparent = renderData.getTexture(kTransparentColor);
+    auto pColor = renderData.getTexture(kColorOut);
+
+    if (!mpScene)
+    {
+        pRenderContext->clearTexture(pColor.get(), float4(0, 0, 0, 0));
+        return;
+    }
+
+    assert(mpProgram);
+    assert(mpVars);
 
     uint2 frameDim = uint2(pVbuffer->getWidth(), pVbuffer->getHeight());
     mpScene->getCamera()->setPatternGenerator(mpSamplePattern, 1.0f / float2(frameDim));
@@ -128,7 +135,7 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["gVBuffer"] = pVbuffer;
     var["gMotion"] = pMotion;
     var["gOpacity"] = pOpacity;
-    var["gTransparent"] = pTransparent;
+    var["gColor"] = pColor;
     var["gStratifiedIndices"] = mpStratifiedIndices;
     var["gStratifiedLookUpTable"] = mpStratifiedLookUpBuffer;
     var["gDitherTex"] = mpFracDitherTex;
@@ -241,6 +248,15 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
     }
 
     widget.checkbox("Cull Back Faces", mCullBackFaces);
+
+    if(auto g = widget.group("Lighting"))
+    {
+        LightSettings::get().renderUI(g);
+    }
+    if(auto g = widget.group("Shadows"))
+    {
+        ShadowSettings::get().renderUI(g);
+    }
 }
 
 void DitherVBuffer::setScene(RenderContext* pRenderContext, const ref<Scene>& pScene)

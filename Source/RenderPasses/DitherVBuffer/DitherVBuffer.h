@@ -162,7 +162,7 @@ private:
     ref<CPUSampleGenerator> mpSamplePattern;
     SamplePattern mSamplePattern = SamplePattern::Halton;
 
-    DitherMode mDitherMode = DitherMode::HashGrid;
+    DitherMode mDitherMode = DitherMode::PerPixel9xPlusRoulette;
     bool mUseAlphaTextureLOD = false; // use lod for alpha lookups
     bool mUseTransparencyWhitelist = false;
     std::set<std::string> mTransparencyWhitelist;
