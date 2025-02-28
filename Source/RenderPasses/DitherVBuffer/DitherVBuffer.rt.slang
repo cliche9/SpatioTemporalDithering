@@ -20,6 +20,9 @@ import Utils.Color.ColorHelpers;
 #ifndef CULL_BACK_FACES
 #define CULL_BACK_FACES 1
 #endif
+#ifndef TRANSPARENCY_WHITELIST
+#define TRANSPARENCY_WHITELIST 0
+#endif
 
 cbuffer PerFrame
 {

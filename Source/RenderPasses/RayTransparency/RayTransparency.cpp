@@ -33,7 +33,7 @@ namespace
 {
     const std::string kVbuffer = "vbuffer";
     const std::string kMotion = "mvec";
-    const std::string kTransparentColor = "transparent";
+    const std::string kColorOut = "color";
 
     const uint32_t kMaxPayloadSizeBytes = 5*4;
     const std::string kProgramRaytraceFile = "RenderPasses/RayTransparency/RayTransparency.rt.slang";
@@ -87,19 +87,23 @@ RenderPassReflection RayTransparency::reflect(const CompileData& compileData)
     RenderPassReflection reflector;
     reflector.addOutput(kVbuffer, "V-buffer").format(HitInfo::kDefaultFormat);
     reflector.addOutput(kMotion, "Motion vector").format(ResourceFormat::RG32Float);
-    reflector.addOutput(kTransparentColor, "Transparent Color (RGB+visibility)").format(ResourceFormat::RGBA16Float);
+    reflector.addOutput(kColorOut, "Final color").format(ResourceFormat::RGBA32Float).bindFlags(ResourceBindFlags::AllColorViews);
     return reflector;
 }
 
 void RayTransparency::execute(RenderContext* pRenderContext, const RenderData& renderData)
 {
-    if (!mpScene) return;
-    assert(mpProgram);
-    assert(mpVars);
-
     auto pVbuffer = renderData.getTexture(kVbuffer);
     auto pMotion = renderData.getTexture(kMotion);
-    auto pTransparent = renderData.getTexture(kTransparentColor);
+    auto pColor = renderData.getTexture(kColorOut);
+
+    if (!mpScene)
+    {
+        pRenderContext->clearTexture(pColor.get(), float4(0, 0, 0, 0));
+        return;
+    }
+    assert(mpProgram);
+    assert(mpVars);
 
     uint2 frameDim = uint2(pVbuffer->getWidth(), pVbuffer->getHeight());
     mpScene->getCamera()->setPatternGenerator(mpSamplePattern, 1.0f / float2(frameDim));
@@ -107,7 +111,7 @@ void RayTransparency::execute(RenderContext* pRenderContext, const RenderData& r
     auto var = mpVars->getRootVar();
     var["gVBuffer"] = pVbuffer;
     var["gMotion"] = pMotion;
-    var["gTransparent"] = pTransparent;
+    var["gColor"] = pColor;
     assert(mpTransparencyWhitelist);
     var["gTransparencyWhitelist"] = mpTransparencyWhitelist;
     LightSettings::get().updateShaderVar(var);
@@ -156,6 +160,15 @@ void RayTransparency::renderUI(Gui::Widgets& widget)
     widget.checkbox("Cull Back Faces", mCullBackFaces);
     //LightSettings::get().renderUI(widget);
     //ShadowSettings::get().renderUI(widget);
+
+    if (auto g = widget.group("Lighting"))
+    {
+        LightSettings::get().renderUI(g);
+    }
+    if (auto g = widget.group("Shadows"))
+    {
+        ShadowSettings::get().renderUI(g);
+    }
 }
 
 void RayTransparency::setScene(RenderContext* pRenderContext, const ref<Scene>& pScene)

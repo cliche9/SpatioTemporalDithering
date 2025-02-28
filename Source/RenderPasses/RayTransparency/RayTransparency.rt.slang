@@ -18,6 +18,9 @@ import Utils.Color.ColorHelpers;
 #ifndef CULL_BACK_FACES
 #define CULL_BACK_FACES 1
 #endif
+#ifndef TRANSPARENCY_WHITELIST
+#define TRANSPARENCY_WHITELIST 0
+#endif
 
 #define MIN_VISIBILITY 0.001
 
@@ -30,7 +33,8 @@ StructuredBuffer<uint> gTransparencyWhitelist;
 
 RWTexture2D<PackedHitInfo> gVBuffer;
 RWTexture2D<float2> gMotion;
-RWTexture2D<float4> gTransparent; // rgba transparent color
+//RWTexture2D<float4> gTransparent; // rgba transparent color
+RWTexture2D<float4> gColor;
 
 struct RayData
 {
@@ -54,11 +58,14 @@ void miss(inout RayData rayData : SV_RayPayload)
     uint2 frameDim = DispatchRaysDimensions().xy;
 
     HitInfo hitInfo = { };
-    gVBuffer[pixel] = hitInfo.getData();
     float3 rayDirNoJitter = gScene.camera.computeRayPinhole(pixel, frameDim, /*no jitter*/false).dir;
     float3 prevEnvMapDir = mul(gScene.camera.data.prevViewMat, float4(rayDirNoJitter, 0.0)).xyz;
     float2 prevUV = ViewSpaceToUV(prevEnvMapDir);
+    gVBuffer[pixel] = hitInfo.getData();
     gMotion[pixel] = prevUV - (float2(pixel)+0.5) / float2(frameDim);
+    
+    rayData.color.rgb += rayData.color.w * shadeEnvmap(-WorldRayDirection()).rgb;
+    rayData.color.w = 0.0;
 }
 
 //Use anyhit for alpha test if activated
@@ -142,22 +149,15 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
     let material = gScene.materials.getMaterial(materialID);   
     float alpha = material.evalOpacity(gScene.materials, v, lod);
 
-    float newVisibility = rayData.color.w * (1.0 - alpha);
-    if(newVisibility <= MIN_VISIBILITY)
+    rayData.color.rgb += rayData.color.w * alpha * shadeVBuffer(triangleHit, pixel, frameDim, -WorldRayDirection()).rgb;
+    rayData.color.w = rayData.color.w * (1.0 - alpha);
+    rayData.rayT = RayTCurrent(); // continue ray here (if color.w > 0)
+
+    if(rayData.color.w <= MIN_VISIBILITY)
     {
-        // write to vbuffer (last entry)
-        rayData.color.w = rayData.color.w * alpha; // correct visibility to blend with the last object
-        // leave rayT as is, to stop ray
         gVBuffer[pixel] = HitInfo(triangleHit).getData();
         gMotion[pixel] = calcMotionVector(pixel, frameDim, triangleHit);
     }
-    else // full shading
-    {
-        rayData.color.rgb += rayData.color.w * alpha * shadeVBuffer(triangleHit, pixel, frameDim, -WorldRayDirection()).rgb;
-        rayData.rayT = RayTCurrent(); // continue ray here (if color.w > 0)
-        rayData.color.w = newVisibility;
-    }
- 
 }
 
 [shader("raygeneration")]
@@ -181,5 +181,6 @@ void rayGen()
         if(data.color.w <= MIN_VISIBILITY || ray.tMin >= ray.tMax) break;
     }
     
-    gTransparent[pixel] = data.color;
+    //gTransparent[pixel] = data.color;
+    gColor[pixel] = data.color;
 }
