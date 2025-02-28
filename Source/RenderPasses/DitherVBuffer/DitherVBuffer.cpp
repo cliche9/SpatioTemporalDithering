@@ -37,7 +37,6 @@ namespace
     const std::string kVbuffer = "vbuffer";
     const std::string kMotion = "mvec";
     const std::string kOpacity = "opacity";
-    const std::string kTransparentColor = "transparent";
     const std::string kColorOut = "color";
 
     const uint32_t kMaxPayloadSizeBytes = 7 * sizeof(float); 
@@ -107,7 +106,6 @@ RenderPassReflection DitherVBuffer::reflect(const CompileData& compileData)
     reflector.addOutput(kVbuffer, "V-buffer").format(HitInfo::kDefaultFormat);
     reflector.addOutput(kMotion, "Motion vector").format(ResourceFormat::RG32Float).flags(RenderPassReflection::Field::Flags::Optional);
     reflector.addOutput(kOpacity, "Opacity Mask (1 = any transparent)").format(ResourceFormat::R8Unorm).flags(RenderPassReflection::Field::Flags::Optional);
-    reflector.addOutput(kTransparentColor, "Transparent Color (RGB+visibility)").format(ResourceFormat::RGBA16Float);
     reflector.addOutput(kColorOut, "Final color").format(ResourceFormat::RGBA32Float).bindFlags(ResourceBindFlags::AllColorViews);
     return reflector;
 }
