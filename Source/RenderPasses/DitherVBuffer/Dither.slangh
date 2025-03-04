@@ -555,7 +555,13 @@ uint2 DecodeMorton2D(uint morton) {
 }
 
 
-
+uint2 applyRotation(uint2 pixel, uint offset, uint width, uint height)
+{
+    offset = offset % (width * height);
+    pixel.x += offset % width;
+    pixel.y += offset / width;
+    return pixel;
+}
 
 float getPixelDitherThreshold2x2(uint2 pixel, uint frameIndex, float3 posW, uint objectOffset)
 {
@@ -564,8 +570,9 @@ float getPixelDitherThreshold2x2(uint2 pixel, uint frameIndex, float3 posW, uint
     //if (objectOffset <= 4) randomOffset = objectOffset;
 
     uint4 mask = get2x2Permutation(randomOffset); // mask with [0, 1, 2, 3] permutation
+    if (gRotatePattern)
+        pixel = applyRotation(pixel, frameIndex, 2, 2); // rotate lookup based on frame index
     uint lookup = (pixel.x % 2u) + 2u * (pixel.y % 2u);
-    if(gRotatePattern) lookup = (lookup + frameIndex) % 4u; // rotate lookup based on frame index
     uint v = mask[lookup]; // 0, 1, 2 or 3
     
     float ditherThreshold = v / 4.0;
@@ -584,17 +591,10 @@ float getPixelDitherThreshold3x3(uint2 pixel, uint frameIndex, float3 posW, uint
     // use random offset to ensure that each primitive uses a different mask
     uint randomOffset = uint(getObjectHash() * 7919);
     if(gRotatePattern)
-    {
-        // frameIndex = frameIndex % 8; // fix for dlss (uneven repeat cycles) => doesnt work
-        pixel.x += frameIndex % 3;
-        pixel.y += frameIndex / 3;
-    }
-    //if(gRotatePattern) randomOffset += frameIndex; // rotate lookup based on frame index
-    //pixel.x += randomOffset % 3u;
-    //pixel.y += randomOffset / 3u;
+        pixel = applyRotation(pixel, frameIndex, 3, 3);
+    
     pixel = pixel % 3u;
 
-    //uint3x3 mask = uint3x3(uint3(0, 7, 3), uint3(6, 5, 2), uint3(4, 1, 8));
     uint3x3 mask = get3x3Permutation(randomOffset);
     uint v = mask[pixel.y][pixel.x]; // 0-8
     
@@ -611,11 +611,12 @@ float getPixelDitherThreshold3x3(uint2 pixel, uint frameIndex, float3 posW, uint
 float getPixelDitherThreshold4x4(uint2 pixel, uint objectOffet, float3 posW, uint frameIndex)
 {
     uint randomOffset = uint(getObjectHash() * 7919);
-    //if (objectOffset <= 4) randomOffset = objectOffset;
 
     if (gRotatePattern)
-        randomOffset += frameIndex; // rotate lookup based on frame index
+        pixel = applyRotation(pixel, frameIndex, 4, 4);
+    
     //if(gRotatePattern) pixel += DecodeMorton2D(frameIndex);
+    // TODO replace lookup with precomputed matrices
     pixel.x += randomOffset % 4u;
     pixel.y += randomOffset / 4u;
     pixel = pixel % 4u;
