@@ -142,6 +142,27 @@ public:
         {NoisePattern::Perlin, "Perlin"}
     });
 
+    enum class NoiseTopPattern : uint32_t
+    {
+        Disabled,
+        StaticWhite,
+        DynamicWhite,
+        StaticBlue,
+        DynamicBlue,
+        StaticBayer,
+        DynamicBayer,
+    };
+
+    FALCOR_ENUM_INFO(NoiseTopPattern, {
+        {NoiseTopPattern::Disabled, "Disabled"},
+        {NoiseTopPattern::StaticWhite, "StaticWhite"},
+        {NoiseTopPattern::DynamicWhite, "DynamicWhite"},
+        {NoiseTopPattern::StaticBlue, "StaticBlue"},
+        //{NoiseTopPattern::DynamicBlue, "DynamicBlue"},
+        {NoiseTopPattern::StaticBayer, "StaticBayer"},
+        //{NoiseTopPattern::DynamicBayer, "DynamicBayer"},
+    });
+
     enum class ObjectHashType : uint32_t
     {
         Quads,
@@ -212,12 +233,13 @@ private:
     ref<Sampler> mpNoiseSampler;
     ref<Texture> mpBlueNoise3DTex;
     ref<Texture> mpBlueNoise64Tex;
+    ref<Texture> mpBayer64Tex;
     NoisePattern mNoisePattern = NoisePattern::Blue;
+    NoiseTopPattern mNoiseTopPattern = NoiseTopPattern::StaticBlue;
     bool mCullBackFaces = false;
     float mMinVisibility = 1.0f;
     bool mAlignMotionVectors = true; // align when using pixel grid techniques
     bool mRotatePattern = true; // rotate pattern when using pixel grid techniques
-    bool mAddNoiseOnPattern = true; // adds additional noise on the threshold to prevent banding
 };
 
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherMode);
@@ -226,4 +248,5 @@ FALCOR_ENUM_REGISTER(DitherVBuffer::DitherPattern);
 FALCOR_ENUM_REGISTER(DitherVBuffer::SamplePattern);
 FALCOR_ENUM_REGISTER(DitherVBuffer::NoisePattern);
 FALCOR_ENUM_REGISTER(DitherVBuffer::ObjectHashType);
+FALCOR_ENUM_REGISTER(DitherVBuffer::NoiseTopPattern);
 FALCOR_ENUM_REGISTER(DitherVBuffer::TemporalDitherMode);

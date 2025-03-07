@@ -72,6 +72,7 @@ DitherVBuffer::DitherVBuffer(ref<Device> pDevice, const Properties& props)
 
     mpBlueNoise3DTex = Texture::createFromFile(mpDevice, "dither/bluenoise3d_16.dds", false, false);
     mpBlueNoise64Tex = Texture::createFromFile(mpDevice, "dither/bluenoise64.dds", false, false);
+    mpBayer64Tex = Texture::createFromFile(mpDevice, "dither/bayer64.dds", false, false);
 
     // load properties
     for (const auto& [key, value] : props)
@@ -149,6 +150,7 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["gPermutations3x3"] = mpPermutations3x3Buffer;
     var["gBlueNoise3DTex"] = mpBlueNoise3DTex;
     var["gBlueNoise64x64Tex"] = mpBlueNoise64Tex;
+    var["gBayerNoise64Tex"] = mpBayer64Tex;
 
     var["PerFrame"]["gFrameCount"] = mFrameCount++;
     var["PerFrame"]["gSampleCount"] = mpSamplePattern->getSampleCount();
@@ -160,10 +162,10 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["DitherConstants"]["gGridScale"] = mGridScale;
     var["DitherConstants"]["gNoiseScale"] = float2(1.0f / mpNoiseTex->getWidth(), 1.0f / mpNoiseTex->getHeight());
     var["DitherConstants"]["gRotatePattern"] = mRotatePattern ? 1 : 0;
-    var["DitherConstants"]["gAddNoiseOnPattern"] = mAddNoiseOnPattern ? 1 : 0;
     var["DitherConstants"]["gObjectHashType"] = uint(mObjectHashType);
     var["DitherConstants"]["gTemporalDitherMode"] = uint(mTemporalDitherMode);
     var["DitherConstants"]["gTemporalDitherLength"] = mTemporalDitherLength;
+    var["DitherConstants"]["gNoiseTop"] = uint(mNoiseTopPattern);
 
     LightSettings::get().updateShaderVar(var);
     ShadowSettings::get().updateShaderVar(mpDevice, var);
@@ -225,7 +227,11 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
     {
         widget.checkbox("Align Motion Vector", mAlignMotionVectors);
         widget.tooltip("Align motion vector to grid size to prevent issues when moving camera");
-        widget.checkbox("Noise on Pattern", mAddNoiseOnPattern);
+    }
+
+    if(is2DDither || is3DDither || mDitherMode == DitherMode::DitherTemporalAA)
+    {
+        widget.dropdown("Noise on Top", mNoiseTopPattern);
     }
 
     if(is2DDither)
