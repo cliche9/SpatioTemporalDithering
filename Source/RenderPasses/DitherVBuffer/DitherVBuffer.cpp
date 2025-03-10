@@ -442,6 +442,9 @@ void DitherVBuffer::createNoisePattern()
     case NoisePattern::Perlin:
         texname = "dither/perlin1024.dds";
         break;
+    case NoisePattern::Blue64:
+        texname = "dither/bluenoise64.dds";
+        break;
     default:
         assert(false);
     }

@@ -130,7 +130,8 @@ public:
         Bayer,
         BlueBayer,
         Poisson,
-        Perlin
+        Perlin,
+        Blue64
     };
 
     FALCOR_ENUM_INFO(NoisePattern, {
@@ -139,7 +140,8 @@ public:
         {NoisePattern::Bayer, "Bayer"},
         {NoisePattern::BlueBayer, "BlueBayer"},
         {NoisePattern::Poisson, "Poisson"},
-        {NoisePattern::Perlin, "Perlin"}
+        {NoisePattern::Perlin, "Perlin"},
+        {NoisePattern::Blue64, "Blue64"}
     });
 
     enum class NoiseTopPattern : uint32_t
