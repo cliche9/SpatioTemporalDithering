@@ -126,6 +126,9 @@ float2 getAlignedMotionVector(float2 mvec, bool isTransparent)
     #if DITHER_MODE == DITHER_MODE_PER_PIXEL_4X4
     align = 4.0;
     #endif
+    #if DITHER_MODE == DITHER_MODE_DITHER_TEMPORAL_AA
+    align = 5.0;
+    #endif
     
     if (!isTransparent || align == 0.0 || !gAlignMotionVectors) return mvec;
 

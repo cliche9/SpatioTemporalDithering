@@ -242,6 +242,7 @@ private:
     float mMinVisibility = 1.0f;
     bool mAlignMotionVectors = true; // align when using pixel grid techniques
     bool mRotatePattern = true; // rotate pattern when using pixel grid techniques
+    bool mDitherTAAPermutations = true;
 };
 
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherMode);

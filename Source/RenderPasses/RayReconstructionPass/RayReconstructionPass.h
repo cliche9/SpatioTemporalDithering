@@ -51,7 +51,7 @@ public:
     virtual bool onKeyEvent(const KeyboardEvent& keyEvent) override { return false; }
 
 private:
-    bool mEnabled = true;
+    bool mEnabled = false; // for performance reasons
     ref<Scene> mpScene;
 
     std::unique_ptr<NGXWrapper> mpNGXWrapper;

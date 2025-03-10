@@ -66,6 +66,7 @@ cbuffer DitherConstants
     uint gTemporalDitherMode;
     uint gTemporalDitherLength; // length of the sequence
     uint gNoiseTop;
+    uint gDitherTAAPermutations; // enables permutations for dither taa
 };
 
 // common variables used in the dithering functions
@@ -869,13 +870,14 @@ float ditherTemporalAAThreshold(DitherInfo d)
     uint2 p = d.pixel + uint2(d.frameIndex);
     uint stratifyIndex = (p.x + p.y * 2u) % 5;
 
-    #define USE_DITHER_TEMPORAL_AA_MASK_WORKAROUND 1
-    #ifdef USE_DITHER_TEMPORAL_AA_MASK_WORKAROUND
-    // Custom workaround to prevent different objects from masking each other out:
-    int statifyNumbers[5]; // obtain one of the 120 permutations of [0, 1, 2, 3, 4]
-    GetPermutation5(uint(getObjectHash() * 120), statifyNumbers);
-    stratifyIndex = statifyNumbers[stratifyIndex];
-    #endif
+    
+    if(gDitherTAAPermutations)
+    {
+        // Custom workaround to prevent different objects from masking each other out:
+        int statifyNumbers[5]; // obtain one of the 120 permutations of [0, 1, 2, 3, 4]
+        GetPermutation5(uint(getObjectHash() * 120), statifyNumbers);
+        stratifyIndex = statifyNumbers[stratifyIndex];
+    }
 
     // random noise to break up the 5 steps
     //float blue = gBlueNoise64x64Tex[pixel % 64u];

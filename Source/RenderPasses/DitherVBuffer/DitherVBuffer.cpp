@@ -166,6 +166,7 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["DitherConstants"]["gTemporalDitherMode"] = uint(mTemporalDitherMode);
     var["DitherConstants"]["gTemporalDitherLength"] = mTemporalDitherLength;
     var["DitherConstants"]["gNoiseTop"] = uint(mNoiseTopPattern);
+    var["DitherConstants"]["gDitherTAAPermutations"] = mDitherTAAPermutations ? 1 : 0;
 
     LightSettings::get().updateShaderVar(var);
     ShadowSettings::get().updateShaderVar(mpDevice, var);
@@ -211,15 +212,16 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
         mDitherMode == DitherMode::PerPixel3x3 ||
         mDitherMode == DitherMode::PerPixel4x4;
     const bool is3DDither = mDitherMode == DitherMode::PerPixel2x2x2;
+    const bool isDitherTAA = mDitherMode == DitherMode::DitherTemporalAA;
 
-    if(is2DDither || is3DDither)
+    if(is2DDither || is3DDither || isDitherTAA)
     {
         widget.checkbox("Align Motion Vector", mAlignMotionVectors);
         widget.tooltip("Align motion vector to grid size to prevent issues when moving camera");
     }
 
     bool useTopNoiseGrid = false;
-    if(is2DDither || is3DDither || mDitherMode == DitherMode::DitherTemporalAA)
+    if(is2DDither || is3DDither || isDitherTAA)
     {
         widget.dropdown("Noise on Top", mNoiseTopPattern);
         if (mNoiseTopPattern == NoiseTopPattern::SurfaceWhite)
@@ -247,6 +249,12 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
         {
             createNoisePattern();
         }
+    }
+
+    if(mDitherMode == DitherMode::DitherTemporalAA)
+    {
+        widget.checkbox("Mask Permutations", mDitherTAAPermutations);
+        widget.tooltip("Uses a permutations of the [0,1,2,3,4] sequence for creating the 5x5 mask. This will prevent objects from masking each other.");
     }
 
     widget.dropdown("Object Hash", mObjectHashType);
