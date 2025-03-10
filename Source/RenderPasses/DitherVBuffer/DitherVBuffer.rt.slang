@@ -50,7 +50,6 @@ struct RayData
     float4 color;
     float rayT; // input: TMax, output: TCurrent
     float minAlphaT; // RayT value of closest alpha-blended hit
-    uint anyCount; // count of any hit shader invocations (can be used for independent mask selection)
 };
 
 void computeRayDifferentials(const TriangleHit hit, float3 rayDir, float hitT, const Camera camera, float2 frameDim, out float2 ddx, out float2 ddy, out float3 dOdx, out float3 dOdy)
@@ -222,7 +221,6 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     if(alpha <= 0.01) IgnoreHit(); // no hit
 
     rayData.minAlphaT = min(rayData.minAlphaT, RayTCurrent()); // store if alpha was encountered
-    rayData.anyCount++; // increase count for independent mask selection
 
     if(!useRussianRouletteForAlphaTest(rayData)) return; // accept this as hit
     // below: russian roulette for alpha test
@@ -375,7 +373,6 @@ void rayGen()
     RayData data;
     data.minAlphaT = ray.tMax; // no alpha encountered yet
     data.color = float4(0, 0, 0, 1); // rbb+visibility
-    data.anyCount = 0u;
     uint rayFlags = 0;
     if (CULL_BACK_FACES) rayFlags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
 
