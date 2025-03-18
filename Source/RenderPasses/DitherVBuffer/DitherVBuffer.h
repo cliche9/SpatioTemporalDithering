@@ -54,15 +54,16 @@ public:
 
     FALCOR_ENUM_INFO(DitherMode, {
         { DitherMode::Disabled, "Disabled" },
-        { DitherMode::PerPixel2x2, "PerPixel2x2" },
-        { DitherMode::PerPixel3x3, "PerPixel3x3" },
-        { DitherMode::PerPixel4x4, "PerPixel4x4" },
-        { DitherMode::PerPixel2x2x2, "PerPixel2x2x2" },
+        { DitherMode::PerPixel3x3, "STD 3x3" },
+        // { DitherMode::PerPixel4x4, "PerPixel4x4" }, deprecated: not up to date
+        // { DitherMode::PerPixel2x2x2, "PerPixel2x2x2" }, // deprecated: too much flicker
         { DitherMode::DitherTemporalAA, "DitherTemporalAA" },
         //{ DitherMode::PerJitter, "PerJitter" }, // deprecated
         { DitherMode::RussianRoulette, "RussianRoulette" },
-        { DitherMode::Periodic, "Periodic" },
         { DitherMode::HashGrid, "HashGrid" },
+        { DitherMode::PerPixel2x2, "STD 2x2" },
+        // the implementation of those work, but they have bad results:
+        { DitherMode::Periodic, "Periodic" },
         { DitherMode::FractalDithering, "FractalDithering" },
         { DitherMode::BlueNoise3D, "BlueNoise3D" },
         
@@ -206,7 +207,7 @@ private:
     CoverageCorrection mCoverageCorrection = CoverageCorrection::DLSS;
     float mDLSSCorrectionStrength = 1.0;
     DitherPattern mFractalDitherPattern = DitherPattern::Dither8x8;
-    float mGridScale = 0.25f;
+    float mGridScale = 0.5f;
     ObjectHashType mObjectHashType = ObjectHashType::Geometry;
 
     ref<Texture> mpFracDitherTex;
