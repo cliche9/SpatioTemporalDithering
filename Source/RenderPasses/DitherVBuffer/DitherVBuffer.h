@@ -225,7 +225,7 @@ private:
     NoiseTopPattern mNoiseTopPattern = NoiseTopPattern::StaticBlue;
     bool mCullBackFaces = false;
     float mMinVisibility = 1.0f;
-    bool mAlignMotionVectors = true; // align when using pixel grid techniques
+    bool mAlignMotionVectors = false; // align when using pixel grid techniques
     bool mRotatePattern = true; // rotate pattern when using pixel grid techniques
     bool mDitherTAAPermutations = true;
 };

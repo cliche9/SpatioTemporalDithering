@@ -246,36 +246,41 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
         widget.tooltip("Uses a permutations of the [0,1,2,3,4] sequence for creating the 5x5 mask. This will prevent objects from masking each other.");
     }
 
-    widget.dropdown("Object Hash", mObjectHashType);
-
-    widget.checkbox("Alpha Texture LOD", mUseAlphaTextureLOD);
-
     widget.dropdown("Coverage Correction", mCoverageCorrection);
     if (mCoverageCorrection == CoverageCorrection::DLSS)
     {
         widget.slider("DLSS Correction Strength", mDLSSCorrectionStrength, 0.0f, 4.0f);
     }
 
-    widget.checkbox("Transparency Whitelist", mUseTransparencyWhitelist);
-    if(mUseTransparencyWhitelist && mpScene)
+
+    if(auto g = widget.group("Scene"))
     {
-        auto g = widget.group("Whitelist");
-        std::string removeEntry;
-        // list all material names of the current scene
-        for (uint mat = 0; mat < mpScene->getMaterialCount(); ++mat)
+        widget.dropdown("Object Hash", mObjectHashType);
+
+        widget.checkbox("Alpha Texture LOD", mUseAlphaTextureLOD);
+
+        widget.checkbox("Cull Back Faces", mCullBackFaces);
+
+        widget.checkbox("Transparency Whitelist", mUseTransparencyWhitelist);
+        widget.tooltip("Uses only whitelisted materials for dithering, when enabled. If not whitelisted, the material will use an alpha test.");
+        if (mUseTransparencyWhitelist && mpScene)
         {
-            std::string name = mpScene->getMaterial(MaterialID(mat))->getName();
-            bool isTransparent = mTransparencyWhitelist.find(name) != mTransparencyWhitelist.end();
-            if (g.checkbox(name.c_str(), isTransparent))
+            auto g2 = widget.group("Whitelist");
+            std::string removeEntry;
+            // list all material names of the current scene
+            for (uint mat = 0; mat < mpScene->getMaterialCount(); ++mat)
             {
-                if (isTransparent) mTransparencyWhitelist.insert(name);
-                else mTransparencyWhitelist.erase(name);
-                updateWhitelistBuffer();
+                std::string name = mpScene->getMaterial(MaterialID(mat))->getName();
+                bool isTransparent = mTransparencyWhitelist.find(name) != mTransparencyWhitelist.end();
+                if (g2.checkbox(name.c_str(), isTransparent))
+                {
+                    if (isTransparent) mTransparencyWhitelist.insert(name);
+                    else mTransparencyWhitelist.erase(name);
+                    updateWhitelistBuffer();
+                }
             }
         }
     }
-
-    widget.checkbox("Cull Back Faces", mCullBackFaces);
 
     if(auto g = widget.group("Lighting"))
     {
