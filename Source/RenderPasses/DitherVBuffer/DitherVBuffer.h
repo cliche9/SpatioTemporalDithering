@@ -108,21 +108,6 @@ public:
         { CoverageCorrection::DLSS, "DLSS" },
     });
 
-    enum class SamplePattern : uint32_t
-    {
-        Halton,
-        Stratified,
-        Sobol,
-        Midpoint
-    };
-
-    FALCOR_ENUM_INFO(SamplePattern, {
-        { SamplePattern::Halton, "Halton"},
-        { SamplePattern::Stratified, "Stratified" },
-        { SamplePattern::Sobol, "Sobol"},
-        { SamplePattern::Midpoint, "Midpoint"},
-    });
-
     enum class NoisePattern : uint32_t
     {
         White,
@@ -200,7 +185,6 @@ private:
     void createStratifiedBuffers();
     // returns true if at least one material was whitelisted (or scene was invalid)
     bool updateWhitelistBuffer();
-    void createSamplePattern(uint sampleCount);
     void createNoisePattern();
 
     ref<Scene> mpScene;
@@ -216,7 +200,6 @@ private:
     uint mFrameCount = 0;
 
     ref<CPUSampleGenerator> mpSamplePattern;
-    SamplePattern mSamplePattern = SamplePattern::Halton;
 
     DitherMode mDitherMode = DitherMode::PerPixel3x3;
     TemporalDitherMode mTemporalDitherMode = TemporalDitherMode::Disabled;
@@ -250,7 +233,6 @@ private:
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherMode);
 FALCOR_ENUM_REGISTER(DitherVBuffer::CoverageCorrection);
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherPattern);
-FALCOR_ENUM_REGISTER(DitherVBuffer::SamplePattern);
 FALCOR_ENUM_REGISTER(DitherVBuffer::NoisePattern);
 FALCOR_ENUM_REGISTER(DitherVBuffer::ObjectHashType);
 FALCOR_ENUM_REGISTER(DitherVBuffer::NoiseTopPattern);

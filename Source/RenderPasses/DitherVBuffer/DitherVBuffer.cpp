@@ -55,7 +55,7 @@ DitherVBuffer::DitherVBuffer(ref<Device> pDevice, const Properties& props)
     : RenderPass(pDevice)
 {
     mpSampleGenerator = SampleGenerator::create(mpDevice, SAMPLE_GENERATOR_UNIFORM);
-    createSamplePattern(16);
+    mpSamplePattern = HaltonSamplePattern::create(16);
     createStratifiedBuffers();
     createNoisePattern();
     setFractalDitherPattern(mFractalDitherPattern);
@@ -188,17 +188,6 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
 {
     widget.slider("Dither Threshold", mMinVisibility, 0.0f, 1.0f);
 
-    auto sampleCount = mpSamplePattern->getSampleCount();
-    if(widget.dropdown("Sample Pattern", mSamplePattern))
-    {
-        createSamplePattern(sampleCount);
-        createStratifiedBuffers();
-    }
-    if(widget.var("Sample Count", sampleCount, 0u, 16u)) // sizes > 16 generate too much possible combinations for the dither pattern (per jitter)
-    {
-        createSamplePattern(sampleCount);
-        createStratifiedBuffers();
-    }
     widget.dropdown("Dither", mDitherMode);
     if(mDitherMode == DitherMode::FractalDithering)
     {
@@ -397,26 +386,6 @@ bool DitherVBuffer::updateWhitelistBuffer()
     mpTransparencyWhitelist = Buffer::createStructured(mpDevice, sizeof(uint32_t), uintCount, ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, whitelist.data(), false);
 
     return any;
-}
-
-void DitherVBuffer::createSamplePattern(uint sampleCount)
-{
-    switch(mSamplePattern)
-    {
-    case SamplePattern::Halton:
-        mpSamplePattern = HaltonSamplePattern::create(sampleCount);
-        break;
-    case SamplePattern::Stratified:
-        mpSamplePattern = StratifiedSamplePattern::create(sampleCount);
-        break;
-    case SamplePattern::Sobol:
-        mpSamplePattern.reset(new SobolGenerator());
-        break;
-    case SamplePattern::Midpoint:
-        mpSamplePattern.reset(new MidpointGenerator());
-    default:
-        assert(false);
-    }
 }
 
 void DitherVBuffer::createNoisePattern()
