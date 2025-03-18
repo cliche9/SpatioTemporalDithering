@@ -171,6 +171,22 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     mpProgram->addDefine("CULL_BACK_FACES", mCullBackFaces ? "1" : "0");
     mpProgram->addDefines(ShadowSettings::get().getShaderDefines(*mpScene, renderData.getDefaultTextureDims()));
 
+    if(mMinVisibility >= 1.0f)
+    {
+        mpProgram->addDefine("FULL_STOCHASTIC");
+        mpProgram->removeDefine("FULL_BASELINE");
+    }
+    else if(mMinVisibility <= 0.0f)
+    {
+        mpProgram->removeDefine("FULL_STOCHASTIC");
+        mpProgram->addDefine("FULL_BASELINE");
+    }
+    else
+    {
+        mpProgram->removeDefine("FULL_STOCHASTIC");
+        mpProgram->removeDefine("FULL_BASELINE");
+    }
+
     uint3 dispatch = uint3(1);
     dispatch.x = pVbuffer->getWidth();
     dispatch.y = pVbuffer->getHeight();

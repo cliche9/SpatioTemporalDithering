@@ -47,7 +47,9 @@ RWTexture2D<float4> gColor; // shaded vbuffer
 
 struct RayData
 {
+#ifndef FULL_STOCHASTIC
     float4 color;
+#endif
     float rayT; // input: TMax, output: TCurrent
     float minAlphaT; // RayT value of closest alpha-blended hit
 };
@@ -122,13 +124,26 @@ void miss(inout RayData rayData : SV_RayPayload)
     gMotion[pixel] = getAlignedMotionVector(prevUV - (float2(pixel)+0.5) / float2(frameDim), rayData.minAlphaT <= RayTCurrent());
     gOpacity[pixel] = rayData.minAlphaT < RayTCurrent() ? 1.0 : 0.0;
 
+#ifdef FULL_STOCHASTIC
+    gColor[pixel] = shadeEnvmap(-WorldRayDirection());
+#else
     rayData.color.rgb += rayData.color.w * shadeEnvmap(-WorldRayDirection()).rgb;
     rayData.color.w = 0.0;
+    gColor[pixel] = rayData.color;
+#endif
 }
 
 bool useRussianRouletteForAlphaTest(RayData rayData)
 {
+#ifdef FULL_STOCHASTIC
+    return true;
+#else
+#ifdef FULL_BASELINE
+    return false;
+#else
     return rayData.color.w <= max(MIN_VISIBILITY, gMinVisibility);
+#endif
+#endif
 }
 
 //Use anyhit for alpha test if activated
@@ -293,6 +308,11 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
         alpha = material.evalOpacity(gScene.materials, v, lod);
     }
 
+#ifdef FULL_STOCHASTIC
+    float4 color = shadeVBuffer(triangleHit, pixel, frameDim, -WorldRayDirection());
+    gColor[pixel] = color;
+    {
+#else
     rayData.color.rgb += rayData.color.w * alpha * shadeVBuffer(triangleHit, pixel, frameDim, -WorldRayDirection()).rgb;
     rayData.color.w = rayData.color.w * (1.0 - alpha);
     rayData.rayT = RayTCurrent(); // continue ray here (if color.w > 0)
@@ -300,10 +320,14 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
     if(rayData.color.w <= MIN_VISIBILITY)
     {
         // write to vbuffer (last entry)
+        gColor[pixel] = rayData.color;
+
+#endif
         gVBuffer[pixel] = HitInfo(triangleHit).getData();
         gMotion[pixel] = calcMotionVector(pixel, frameDim, triangleHit, rayData.minAlphaT <= RayTCurrent());
         gOpacity[pixel] = rayData.minAlphaT <= RayTCurrent() ? 1.0 : 0.0;
     }
+    
 }
 
 [shader("raygeneration")]
@@ -316,17 +340,21 @@ void rayGen()
 
     RayData data;
     data.minAlphaT = ray.tMax; // no alpha encountered yet
+    #ifndef FULL_STOCHASTIC
     data.color = float4(0, 0, 0, 1); // rbb+visibility
+    #endif
     uint rayFlags = 0;
     if (CULL_BACK_FACES) rayFlags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
 
+    #ifndef FULL_STOCHASTIC
     for(uint i = 0; i < 256; ++i)
+    #endif
     {
         data.rayT = ray.tMax; // overwrite with max t
         TraceRay(gScene.rtAccel, rayFlags, kInstanceCameraParticle, 0, rayTypeCount, 0, ray.toRayDesc(), data);
         ray.tMin = data.rayT; // set ray t from hitpoint to new start
+        #ifndef FULL_STOCHASTIC
         if(data.color.w <= MIN_VISIBILITY || ray.tMin >= ray.tMax) break;
+        #endif
     }
-
-    gColor[pixel] = data.color;
 }
