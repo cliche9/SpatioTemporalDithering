@@ -146,6 +146,16 @@ bool useRussianRouletteForAlphaTest(RayData rayData)
 #endif
 }
 
+bool isAlphaTested(uint materialID)
+{
+    #if TRANSPARENCY_WHITELIST == 0
+    return false;
+    #else
+    uint isTransparent = (gTransparencyWhitelist[materialID / 32u] & (1u << (materialID % 32u)));
+    return isTransparent == 0u;
+    #endif
+}
+
 //Use anyhit for alpha test if activated
 [shader("anyhit")]
 void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAttributes attribs : SV_IntersectionAttributes)
@@ -173,16 +183,13 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     let lod = ExplicitLodTextureSampler(0.0);
     #endif
 
-    #if TRANSPARENCY_WHITELIST != 0
-    uint isTransparent = (gTransparencyWhitelist[materialID / 32u] & (1u << (materialID % 32u)));
-    if(isTransparent == 0u)
+    if(isAlphaTested(materialID))
     {
         // use default alpha test if not marked as transparent
         if (gScene.materials.alphaTest(v, materialID, lod))
             IgnoreHit();
         return;
     }
-    #endif
 
     let material = gScene.materials.getMaterial(materialID);
     float alpha = material.evalOpacity(gScene.materials, v, lod);
@@ -291,33 +298,19 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
     triangleHit.instanceID = getGeometryInstanceID();
     triangleHit.primitiveIndex = PrimitiveIndex();
     triangleHit.barycentrics = attribs.barycentrics;
-   
-    float alpha = 1.0; // default value when using russian roulette
-    if(!useRussianRouletteForAlphaTest(rayData))
-    {
-        // lod
-        #if ALPHA_TEXTURE_LOD != 0
-        float2 ddx, ddy;
-        computeRayDifferentials(triangleHit, WorldRayDirection(), RayTCurrent(), gScene.camera, float2(frameDim), ddx, ddy);
-        let lod = ExplicitGradientTextureSampler(ddx, ddy);
-        #else
-        let lod = ExplicitLodTextureSampler(0.0);
-        #endif  
-
-        // eval alpha to decide wheter transparent hit or final vbuffer entry (opaque)
-        GeometryInstanceID instanceID = getGeometryInstanceID();
-        VertexData v = getVertexData(instanceID, PrimitiveIndex(), attribs);
-        uint materialID = gScene.getMaterialID(instanceID);
-        let material = gScene.materials.getMaterial(materialID);   
-        alpha = material.evalOpacity(gScene.materials, v, lod);
-    }
 
 #ifdef FULL_STOCHASTIC
-    float4 color = shadeVBuffer(triangleHit, pixel, frameDim, -WorldRayDirection());
-    gColor[pixel] = color;
+    float3 color = shadeVBuffer(triangleHit, pixel, frameDim, -WorldRayDirection()).rgb;
     {
+        // write to vbuffer (last entry)
+        gColor[pixel] = float4(color, 1.0);
 #else
-    rayData.color.rgb += rayData.color.w * alpha * shadeVBuffer(triangleHit, pixel, frameDim, -WorldRayDirection()).rgb;
+    float4 shadedColor = shadeVBuffer(triangleHit, pixel, frameDim, -WorldRayDirection());
+    float alpha = 1.0;
+    uint materialID = gScene.getMaterialID(getGeometryInstanceID());
+    if (!useRussianRouletteForAlphaTest(rayData) && !isAlphaTested(materialID))
+        alpha = shadedColor.a;
+    rayData.color.rgb += rayData.color.w * alpha * shadedColor.rgb;
     rayData.color.w = rayData.color.w * (1.0 - alpha);
     rayData.rayT = RayTCurrent(); // continue ray here (if color.w > 0)
 
@@ -325,7 +318,6 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
     {
         // write to vbuffer (last entry)
         gColor[pixel] = rayData.color;
-
 #endif
         gVBuffer[pixel] = HitInfo(triangleHit).getData();
         gMotion[pixel] = calcMotionVector(pixel, frameDim, triangleHit, rayData.minAlphaT <= RayTCurrent());
