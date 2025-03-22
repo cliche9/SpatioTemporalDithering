@@ -73,6 +73,8 @@ interface IMaterial
     */
     float evalOpacity(const MaterialSystem ms, const VertexData v, const ITextureSampler lod);
 
+    float evalOpacity(const MaterialSystem ms, const float2 texC, const ITextureSampler lod);
+
     // gets dimension of the underlying texture. Prefferably albedo, otherwise alpha, otherwise return (1, 1)
     uint2 getDimensions(const MaterialSystem ms);
 

@@ -172,7 +172,8 @@ void DitherVBufferRaster::execute(RenderContext* pRenderContext, const RenderDat
     mpFbo->attachColorTarget(pMotion, 1);
     mpState->setFbo(mpFbo);
 
-    mpScene->rasterize(pRenderContext, mpState.get(), mpVars.get(), RasterizerState::CullMode::None, RasterizerState::MeshRenderMode::All);
+    auto cullMode = mCullBackFaces ? RasterizerState::CullMode::Back : RasterizerState::CullMode::None;
+    mpScene->rasterize(pRenderContext, mpState.get(), mpVars.get(), cullMode, RasterizerState::MeshRenderMode::All);
 }
 
 void DitherVBufferRaster::renderUI(Gui::Widgets& widget)

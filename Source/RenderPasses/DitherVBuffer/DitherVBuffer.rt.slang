@@ -14,6 +14,12 @@ import Utils.Color.ColorHelpers;
 
 #include "Dither.slangh"
 
+float getObjectHash()
+{
+    if(gObjectHashType == OBJECT_HASH_QUADS) return hash3D(float3(InstanceID(), GeometryIndex(), PrimitiveIndex() / 2u));
+    return hash3D(float3(InstanceID(), GeometryIndex(), HitKind() == HIT_KIND_TRIANGLE_FRONT_FACE));
+}
+
 #ifndef ALPHA_TEXTURE_LOD
 #define ALPHA_TEXTURE_LOD 0
 #endif

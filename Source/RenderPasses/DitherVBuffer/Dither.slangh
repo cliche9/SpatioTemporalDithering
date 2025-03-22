@@ -86,6 +86,8 @@ static const int4x4 ditherMatrix = int4x4(
         int4(15, 7, 13, 5)
     );
 
+float getObjectHash();
+
 uint3x3 get3x3Permutation(uint id)
 {
     uint elementCount, stride;
@@ -106,12 +108,6 @@ uint3x3 get3x3Permutation(uint id)
     m[2][2] = 36 - sumValues;
 
     return m;
-}
-
-float getObjectHash()
-{
-    if(gObjectHashType == OBJECT_HASH_QUADS) return hash3D(float3(InstanceID(), GeometryIndex(), PrimitiveIndex() / 2u));
-    return hash3D(float3(InstanceID(), GeometryIndex(), HitKind() == HIT_KIND_TRIANGLE_FRONT_FACE));
 }
 
 uint4 get2x2Permutation(uint i) {
