@@ -83,8 +83,11 @@ PSOut main(float2 texC : TEXCOORD, float4 svPos : SV_POSITION)
     
     const HitInfo hit = HitInfo(vbuffer[pixel]);
 
+#if USE_RAY_DIR == 1
     float3 viewDir = -rayDir[pixel].xyz;
-    if (all(viewDir == 0.0)) viewDir = -gScene.camera.computeRayPinhole(pixel, frameDim).dir;
+#else
+    float3 viewDir = -gScene.camera.computeRayPinhole(pixel, frameDim).dir;
+#endif
 
     PSOut o;
     o.color = shadeVBuffer(hit, pixel, frameDim, viewDir);

@@ -98,6 +98,7 @@ void VBufferLighting::execute(RenderContext* pRenderContext, const RenderData& r
     auto pProgram = mpPass->getProgram();
     pProgram->addDefines(ShadowSettings::get().getShaderDefines(*mpScene, renderData.getDefaultTextureDims()));
     pProgram->addDefine("USE_RAY_SHADOW", mUseRayShadow ? "1" : "0");
+    pProgram->addDefine("USE_RAY_DIR", pRayDir ? "1" : "0");
 
     mpScene->setRaytracingShaderData(pRenderContext, vars);
 
