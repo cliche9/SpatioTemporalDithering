@@ -84,6 +84,14 @@ float4 shadeVBuffer(TriangleHit triangleHit, uint2 pixel, uint2 frameDim, float3
         
     ShadingData sd = gScene.materials.prepareShadingData(v, materialID, viewDir, lod);
 
+    // check if viewing from wrong side (since adjust shading normal does not always work as expected)
+    if(!sd.frontFacing)
+    {
+        sd.frontFacing = true;
+        sd.faceN = -sd.faceN;
+        sd.frame.N = -sd.frame.N;
+    }
+        
     // Create material instance at shading point.
     let mi = gScene.materials.getMaterialInstance(sd, lod, (uint) MaterialInstanceHints::AdjustShadingNormal);
     let bsdf = mi.getProperties(sd);
