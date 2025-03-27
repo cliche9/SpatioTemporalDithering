@@ -68,8 +68,13 @@ RenderPassReflection UnpackVBuffer::reflect(const CompileData& compileData)
 {
     // Define the required resources here
     RenderPassReflection reflector;
-    reflector.addInput(kVBuffer, "vbuffer");
-    addRenderPassOutputs(reflector, kVBufferExtraChannels);
+    auto in = reflector.addInput(kVBuffer, "vbuffer");
+    // get input dim
+    uint2 dim = compileData.defaultTexDims;
+    if (in.isValid())
+        dim = { in.getWidth(), in.getHeight() };
+
+    addRenderPassOutputs(reflector, kVBufferExtraChannels, ResourceBindFlags::UnorderedAccess, dim);
     return reflector;
 }
 
