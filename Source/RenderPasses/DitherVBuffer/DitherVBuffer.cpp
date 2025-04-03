@@ -195,7 +195,7 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
 
 void DitherVBuffer::renderUI(Gui::Widgets& widget)
 {
-    widget.slider("Dither Threshold", mMinVisibility, 0.0f, 1.0f);
+    widget.slider("Hybrid Threshold", mMinVisibility, 0.0f, 1.0f);
 
     widget.dropdown("Dither", mDitherMode);
     if(mDitherMode == DitherMode::FractalDithering)
@@ -228,7 +228,7 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
 
     if(is2DDither || mDitherMode == DitherMode::HashGrid)
     {
-        widget.checkbox("Rotate Pattern", mRotatePattern);
+        widget.checkbox("Serpentine Pattern", mRotatePattern);
         widget.tooltip("Rotates the per-pixel dither pattern based on the frame index");
     }
 
@@ -246,11 +246,11 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
 
     if(mDitherMode == DitherMode::DitherTemporalAA)
     {
-        widget.checkbox("Mask Permutations", mDitherTAAPermutations);
+        widget.checkbox("Enable DTAA*", mDitherTAAPermutations);
         widget.tooltip("Uses a permutations of the [0,1,2,3,4] sequence for creating the 5x5 mask. This will prevent objects from masking each other.");
     }
 
-    widget.dropdown("Coverage Correction", mCoverageCorrection);
+    widget.dropdown("Correction", mCoverageCorrection);
     if (mCoverageCorrection != CoverageCorrection::Disabled)
     {
         widget.slider("Correction Strength", mDLSSCorrectionStrength, 0.0f, 4.0f);

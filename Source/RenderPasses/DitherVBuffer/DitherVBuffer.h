@@ -31,6 +31,8 @@
 #include "Utils/SampleGenerators/HaltonSamplePattern.h"
 #include "Utils/SampleGenerators/StratifiedSamplePattern.h"
 
+
+
 using namespace Falcor;
 
 // use this define to enable the use of hash grids for surface attached noise and techniques
@@ -82,10 +84,10 @@ public:
     { DitherMode::DitherTemporalAA, "DitherTemporalAA" },
     //{ DitherMode::PerJitter, "PerJitter" }, // deprecated
     { DitherMode::RussianRoulette, "RussianRoulette" },
-    { DitherMode::PerPixel2x2, "STD 2x2" },
+    //{ DitherMode::PerPixel2x2, "STD 2x2" },
     // the implementation of those work, but they have bad results:
-    { DitherMode::Periodic, "Periodic" },
-    { DitherMode::BlueNoise3D, "BlueNoise3D" },
+    //{ DitherMode::Periodic, "Periodic" },
+    //{ DitherMode::BlueNoise3D, "BlueNoise3D" },
 });
 #endif
 
@@ -164,10 +166,10 @@ public:
     FALCOR_ENUM_INFO(NoiseTopPattern, {
     {NoiseTopPattern::Disabled, "Disabled"},
     {NoiseTopPattern::StaticWhite, "StaticWhite"},
-    {NoiseTopPattern::DynamicWhite, "DynamicWhite"},
+    //{NoiseTopPattern::DynamicWhite, "DynamicWhite"},
     {NoiseTopPattern::StaticBlue, "StaticBlue"},
-    {NoiseTopPattern::DynamicBlue, "DynamicBlue"},
-    {NoiseTopPattern::StaticBayer, "StaticBayer"},
+    //{NoiseTopPattern::DynamicBlue, "DynamicBlue"},
+    //{NoiseTopPattern::StaticBayer, "StaticBayer"},
     //{NoiseTopPattern::DynamicBayer, "DynamicBayer"},
         });
 #endif
