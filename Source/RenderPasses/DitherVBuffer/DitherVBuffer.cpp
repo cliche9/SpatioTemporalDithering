@@ -102,12 +102,14 @@ Properties DitherVBuffer::getProperties() const
 
 RenderPassReflection DitherVBuffer::reflect(const CompileData& compileData)
 {
+    uint2 dims = getRenderSize(compileData.defaultTexDims, mRenderScale);
+
     // Define the required resources here
     RenderPassReflection reflector;
-    reflector.addOutput(kVbuffer, "V-buffer").format(HitInfo::kDefaultFormat);
-    reflector.addOutput(kMotion, "Motion vector").format(ResourceFormat::RG32Float).flags(RenderPassReflection::Field::Flags::Optional);
-    reflector.addOutput(kOpacity, "Opacity Mask (1 = any transparent)").format(ResourceFormat::R8Unorm).flags(RenderPassReflection::Field::Flags::Optional);
-    reflector.addOutput(kColorOut, "Final color").format(ResourceFormat::RGBA32Float).bindFlags(ResourceBindFlags::AllColorViews);
+    reflector.addOutput(kVbuffer, "V-buffer").format(HitInfo::kDefaultFormat).texture2D(dims.x, dims.y);
+    reflector.addOutput(kMotion, "Motion vector").format(ResourceFormat::RG32Float).flags(RenderPassReflection::Field::Flags::Optional).texture2D(dims.x, dims.y);
+    reflector.addOutput(kOpacity, "Opacity Mask (1 = any transparent)").format(ResourceFormat::R8Unorm).flags(RenderPassReflection::Field::Flags::Optional).texture2D(dims.x, dims.y);
+    reflector.addOutput(kColorOut, "Final color").format(ResourceFormat::RGBA32Float).bindFlags(ResourceBindFlags::AllColorViews).texture2D(dims.x, dims.y);
     return reflector;
 }
 
@@ -195,6 +197,9 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
 
 void DitherVBuffer::renderUI(Gui::Widgets& widget)
 {
+    if (widget.dropdown("Render Scale", mRenderScale))
+        requestRecompile();
+
     widget.slider("Hybrid Threshold", mMinVisibility, 0.0f, 1.0f);
 
     widget.dropdown("Dither", mDitherMode);

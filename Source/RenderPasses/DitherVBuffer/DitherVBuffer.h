@@ -185,6 +185,24 @@ public:
         {ObjectHashType::Geometry, "Geometry"},
     });
 
+    // based on DLSS scales
+    enum class RenderScale : uint32_t
+    {
+        Full,
+        Quality,
+        Balanced,
+        Performance,
+        UtraPerformance,
+    };
+
+    FALCOR_ENUM_INFO(RenderScale, {
+        {RenderScale::Full, "Full (100%)"},
+        {RenderScale::Quality, "Quality (66.7%)"},
+        {RenderScale::Balanced, "Balanced (58%)"},
+        {RenderScale::Performance, "Performance (50%)"},
+        {RenderScale::UtraPerformance, "UltraPerformance (33.3%)"},
+    });
+
     FALCOR_PLUGIN_CLASS(DitherVBuffer, "DitherVBuffer", "VBuffer with Dithering options for transparency");
 
     static ref<DitherVBuffer> create(ref<Device> pDevice, const Properties& props) { return make_ref<DitherVBuffer>(pDevice, props); }
@@ -200,7 +218,29 @@ public:
     virtual bool onMouseEvent(const MouseEvent& mouseEvent) override { return false; }
     virtual bool onKeyEvent(const KeyboardEvent& keyEvent) override { return false; }
 
+    static uint2 getRenderSize(uint2 displaySize, RenderScale scale)
+    {
+        uint2 res = displaySize;
+        switch (scale)
+        {
+        case RenderScale::Quality:
+            res = uint2(ceil(float2(displaySize) * 0.667f));
+            break;
+        case RenderScale::Balanced:
+            res = uint2(ceil(float2(displaySize) * 0.58f));
+            break;
+        case RenderScale::Performance:
+            res = uint2(ceil(float2(displaySize) * 0.50f));
+            break;
+        case RenderScale::UtraPerformance:
+            res = uint2(ceil(float2(displaySize) * 0.333f));
+            break;
+        }
+        res = max(res, uint2(1));
+        return res;
+    }
 private:
+    
     void setFractalDitherPattern(DitherPattern pattern);
 
     void setupProgram();
@@ -245,6 +285,8 @@ private:
     bool mAlignMotionVectors = false; // align when using pixel grid techniques
     bool mRotatePattern = true; // rotate pattern when using pixel grid techniques
     bool mDitherTAAPermutations = true;
+
+    RenderScale mRenderScale = RenderScale::Full;
 };
 
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherMode);
@@ -253,3 +295,4 @@ FALCOR_ENUM_REGISTER(DitherVBuffer::DitherPattern);
 FALCOR_ENUM_REGISTER(DitherVBuffer::NoisePattern);
 FALCOR_ENUM_REGISTER(DitherVBuffer::ObjectHashType);
 FALCOR_ENUM_REGISTER(DitherVBuffer::NoiseTopPattern);
+FALCOR_ENUM_REGISTER(DitherVBuffer::RenderScale);
