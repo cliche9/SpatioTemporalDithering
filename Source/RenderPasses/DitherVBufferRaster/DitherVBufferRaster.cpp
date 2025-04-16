@@ -181,6 +181,25 @@ void DitherVBufferRaster::execute(RenderContext* pRenderContext, const RenderDat
         mpState->setProgram(mpProgram);
         (mpScene.get()->*rasterize)(pRenderContext, mpState.get(), mpVars.get(), cullMode, RasterizerState::MeshRenderMode::SkipOpaque, true);
     }
+    /*
+    {
+        FALCOR_PROFILE(pRenderContext, "Opaque");
+        mpState->setProgram(mpOpaqueProgram);
+        mpScene->rasterizeDynamic(pRenderContext, mpState.get(), mpVars.get(), cullMode,
+            [this](const MeshDesc& meshDesc, const Material& material)
+            {
+                return material.isOpaque();
+            });
+    }
+    {
+        FALCOR_PROFILE(pRenderContext, "Transparent");
+        mpState->setProgram(mpProgram);
+        mpScene->rasterizeDynamic(pRenderContext, mpState.get(), mpVars.get(), RasterizerState::CullMode::None,
+            [this](const MeshDesc& meshDesc, const Material& material)
+            {
+                return !material.isOpaque();
+            });
+    }*/
 }
 
 void DitherVBufferRaster::renderUI(Gui::Widgets& widget)
