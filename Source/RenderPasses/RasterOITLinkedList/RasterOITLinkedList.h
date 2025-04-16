@@ -59,6 +59,8 @@ private:
     ref<GraphicsVars> mpVars;
     ref<Fbo> mpFbo;
 
+    ref<ComputePass> mpSortPass;
+
     ref<Buffer> mpCountBuffer;
     ref<Buffer> mpDataBuffer;
 

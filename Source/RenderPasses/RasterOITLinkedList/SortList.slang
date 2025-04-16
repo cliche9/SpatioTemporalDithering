@@ -1,47 +1,48 @@
-#include "Scene/SceneDefines.slangh"
-#include "Utils/Math/MathConstants.slangh"
+RWTexture2D<float4> gColor;
+Texture2D<uint> gHead;
 
-import Scene.Raster;
-import Utils.Math.MathHelpers;
-import Utils.Sampling.SampleGenerator;
-import Utils.Math.PackedFormats;
-import Utils.Math.FormatConversion;
-
-
-#ifndef ALPHA_TEXTURE_LOD
-#define ALPHA_TEXTURE_LOD 0
-#endif
-
-VSOut vsMain(VSIn vIn)
+struct BufferData // 4 * 4 byte 
 {
-    return defaultVS(vIn);
-}
-
-struct PsOut
-{
-    PackedHitInfo vbuffer : SV_Target0;
+    uint next;
+    float depth;
+    half4 color;
+    //uint2 color;
+    //float2 color;
 };
 
-PsOut psMain(VSOut v, uint triangleIndex : SV_PrimitiveID, float3 barycentrics : SV_Barycentrics, bool isFrontFace : SV_IsFrontFace)
-{
-    PsOut o;
-    TriangleHit triangleHit;
-    triangleHit.instanceID = v.instanceID;
-    triangleHit.primitiveIndex = triangleIndex;
-    triangleHit.barycentrics = barycentrics.yz;
-    o.vbuffer = triangleHit.pack();
+StructuredBuffer<BufferData> gBuffer;
 
-#ifdef OPAQUE_SHADER
-    return o;
-#else
-    #if ALPHA_TEXTURE_LOD != 0
-    let lod = ImplicitLodTextureSampler();
-    #else
-    let lod = ExplicitLodTextureSampler(0.0);
-    #endif
+cbuffer PerFrame
+{
+    uint2 gFrameDim;
+    uint maxElements;
+}
+
+[numthreads(16, 16, 1)]
+void main(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint3 localId : SV_GroupThreadID)
+{
+    uint2 pixel = id.xy;
+    if (pixel.x >= gFrameDim.x || pixel.y >= gFrameDim.y)
+        return;
+
+    uint head = gHead[pixel];
+    if (head >= maxElements)
+        return;
+
+    float4 color = float4(0, 0, 0, 1);
+    uint count = 0;
     
-    if (alphaTest(v, triangleIndex, lod))
-        discard;
-    return o;
-#endif
+    // count items
+    uint next = head;
+    while(next < maxElements)
+    {
+        BufferData data = gBuffer[next];
+        next = data.next;
+        // assume sorted
+        color.rgb += color.a * data.color.a * data.color.rgb;
+        color.a *= (1.0 - data.color.a);
+        count++;
+    }
+
+    gColor[pixel] = color;
 }

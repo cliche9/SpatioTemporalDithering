@@ -39,7 +39,7 @@ namespace
     const std::string kWhitelist = "whitelist";
 
     const std::string kProgramFile = "RenderPasses/RasterOITLinkedList/BuildList.3D.slang";
-    const std::string kSortFile = "RenderPasses/RasterOITLinkedList/SortList.3D.slang";
+    const std::string kSortFile = "RenderPasses/RasterOITLinkedList/SortList.slang";
 }
 
 extern "C" FALCOR_API_EXPORT void registerPlugin(Falcor::PluginRegistry& registry)
@@ -60,6 +60,12 @@ RasterOITLinkedList::RasterOITLinkedList(ref<Device> pDevice, const Properties& 
 
     uint init = 0;
     mpCountBuffer = Buffer::createStructured(mpDevice, sizeof(uint), 1, ResourceBindFlags::UnorderedAccess | ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, &init, false);
+
+    // sort pass
+    Program::Desc desc;
+    desc.addShaderLibrary(kSortFile).csEntry("main").setShaderModel("6_5");
+
+    mpSortPass = ComputePass::create(mpDevice, desc);
 }
 
 Properties RasterOITLinkedList::getProperties() const
@@ -74,7 +80,7 @@ RenderPassReflection RasterOITLinkedList::reflect(const CompileData& compileData
 
     reflector.addInternal(kHead, "head pointer").format(ResourceFormat::R32Uint).bindFlags(ResourceBindFlags::UnorderedAccess);
 
-    reflector.addOutput(kColor, "Color buffer").format(ResourceFormat::RGBA16Float);
+    reflector.addOutput(kColor, "Color buffer").format(ResourceFormat::RGBA16Float).bindFlags(ResourceBindFlags::AllColorViews);
     return reflector;
 }
 
@@ -100,33 +106,34 @@ void RasterOITLinkedList::execute(RenderContext* pRenderContext, const RenderDat
 
     if (!mpDataBuffer || mpDataBuffer->getElementCount() != mDataBufferSize)
     {
-        mpDataBuffer = Buffer::createStructured(mpDevice, sizeof(uint4), mDataBufferSize, ResourceBindFlags::UnorderedAccess, Buffer::CpuAccess::None);
+        mpDataBuffer = Buffer::createStructured(mpDevice, sizeof(uint4), mDataBufferSize, ResourceBindFlags::UnorderedAccess | ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None);
     }
-
-    auto vars = mpVars->getRootVar();
-    vars["gHead"] = pHead;
-    vars["gBuffer"] = mpDataBuffer;
-    vars["gCount"] = mpCountBuffer;
-
-    vars["PerFrame"]["gFrameDim"] = uint2(pDepth->getWidth(), pDepth->getHeight());
-    vars["PerFrame"]["maxElements"] = mpDataBuffer->getElementCount();
-
-    // lighting settings
-    LightSettings::get().updateShaderVar(vars);
-    ShadowSettings::get().updateShaderVar(mpDevice, vars);
-    mpProgram->addDefines(ShadowSettings::get().getShaderDefines(*mpScene, renderData.getDefaultTextureDims()));
-
-    // framebuffer
-    mpFbo->attachDepthStencilTarget(pDepth);
-    mpState->setFbo(mpFbo);
-
-    std::set<std::string> whitelist;
-    const bool useWhitelist = renderData.getDictionary().keyExists(kWhitelist);
-    if (useWhitelist)
-        whitelist = renderData.getDictionary().getValue<decltype(whitelist)>(kWhitelist);
 
     {
         FALCOR_PROFILE(pRenderContext, "Build List");
+
+        auto vars = mpVars->getRootVar();
+        vars["gHead"] = pHead;
+        vars["gBuffer"] = mpDataBuffer;
+        vars["gCount"] = mpCountBuffer;
+
+        vars["PerFrame"]["gFrameDim"] = uint2(pDepth->getWidth(), pDepth->getHeight());
+        vars["PerFrame"]["maxElements"] = mpDataBuffer->getElementCount();
+
+        // lighting settings
+        LightSettings::get().updateShaderVar(vars);
+        ShadowSettings::get().updateShaderVar(mpDevice, vars);
+        mpProgram->addDefines(ShadowSettings::get().getShaderDefines(*mpScene, renderData.getDefaultTextureDims()));
+
+        // framebuffer
+        mpFbo->attachDepthStencilTarget(pDepth);
+        mpState->setFbo(mpFbo);
+
+        std::set<std::string> whitelist;
+        const bool useWhitelist = renderData.getDictionary().keyExists(kWhitelist);
+        if (useWhitelist)
+            whitelist = renderData.getDictionary().getValue<decltype(whitelist)>(kWhitelist);
+
         mpState->setProgram(mpProgram);
         mpScene->rasterizeDynamic(pRenderContext, mpState.get(), mpVars.get(), RasterizerState::CullMode::None,
             [&](const MeshDesc& meshDesc, const Material& material)
@@ -140,7 +147,19 @@ void RasterOITLinkedList::execute(RenderContext* pRenderContext, const RenderDat
             });
     }
 
-    
+    {
+        FALCOR_PROFILE(pRenderContext, "Sort and Blend");
+        auto vars = mpSortPass->getRootVar();
+
+        vars["gHead"] = pHead;
+        vars["gBuffer"] = mpDataBuffer;
+        vars["gColor"] = pColor;
+
+        vars["PerFrame"]["gFrameDim"] = uint2(pDepth->getWidth(), pDepth->getHeight());
+        vars["PerFrame"]["maxElements"] = mpDataBuffer->getElementCount();
+
+        mpSortPass->execute(pRenderContext, pDepth->getWidth(), pDepth->getHeight());
+    }
 }
 
 void RasterOITLinkedList::renderUI(Gui::Widgets& widget)
