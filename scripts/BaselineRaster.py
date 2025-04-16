@@ -25,9 +25,9 @@ def render_graph_BaselineRaster():
     g.add_edge('RasterVBuffer.depth', 'FSR.depth')
     g.add_edge('RasterVBuffer.depth', 'DLSSPass.depth')
     g.add_edge('RasterVBuffer.depth', 'RasterOITLinkedList.depth')
+    g.add_edge('RasterOITLinkedList.color', 'VBufferLighting.transparency')
     g.mark_output('ToneMapper.dst')
     g.mark_output('VBufferLighting.color')
-    g.mark_output('RasterOITLinkedList.color')
     return g
 
 BaselineRaster = render_graph_BaselineRaster()

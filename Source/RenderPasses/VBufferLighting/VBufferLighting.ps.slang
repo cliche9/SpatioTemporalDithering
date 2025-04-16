@@ -4,6 +4,7 @@
 Texture2DArray<float> visibilityBuffer;
 Texture2D<PackedHitInfo> vbuffer;
 Texture2D<float4> rayDir;
+Texture2D<float4> transparency;
 
 #ifndef USE_RAY_SHADOW
 #define USE_RAY_SHADOW 0
@@ -89,8 +90,19 @@ PSOut main(float2 texC : TEXCOORD, float4 svPos : SV_POSITION)
     float3 viewDir = -gScene.camera.computeRayPinhole(pixel, frameDim).dir;
 #endif
 
+    float4 color = float4(0, 0, 0, 1);
+#if USE_TRANSPARENCY == 1
+    color = transparency[pixel];
+#endif
+    if(color.a > 0.001)
+    {
+        float4 c = shadeVBuffer(hit, pixel, frameDim, viewDir);
+        color.rgb += color.a * c.rgb;
+    }
+    color.a = 1.0;
+    
     PSOut o;
-    o.color = shadeVBuffer(hit, pixel, frameDim, viewDir);
+    o.color = color;
     o.mvec = calcMotionVector(pixel, frameDim, hit);
     return o;
 }
