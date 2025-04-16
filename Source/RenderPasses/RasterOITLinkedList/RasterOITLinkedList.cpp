@@ -59,7 +59,7 @@ RasterOITLinkedList::RasterOITLinkedList(ref<Device> pDevice, const Properties& 
     mpFbo = Fbo::create(mpDevice);
 
     uint init = 0;
-    mpCountBuffer = Buffer::createStructured(mpDevice, 4, 1, ResourceBindFlags::UnorderedAccess, Buffer::CpuAccess::Write, &init, false);
+    mpCountBuffer = Buffer::createStructured(mpDevice, sizeof(uint), 1, ResourceBindFlags::UnorderedAccess | ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, &init, false);
 }
 
 Properties RasterOITLinkedList::getProperties() const
@@ -88,8 +88,7 @@ void RasterOITLinkedList::execute(RenderContext* pRenderContext, const RenderDat
     uint32_t uintmax = uint32_t(-1);
     pRenderContext->clearTexture(pColor.get(), float4(0, 0, 0, 1));
     pRenderContext->clearUAV(pHead->getUAV().get(), uint4(uintmax));
-    uint32_t zero = 0;
-    pRenderContext->updateBuffer(mpCountBuffer.get(), &zero, 0, sizeof(zero));
+    pRenderContext->clearUAV(mpCountBuffer->getUAV(0, 1).get(), uint4(0));
 
     if (!mpScene)
     {

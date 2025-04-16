@@ -9,6 +9,10 @@ import Utils.Sampling.SampleGenerator;
 import Utils.Math.PackedFormats;
 import Utils.Math.FormatConversion;
 
+#ifndef ALPHA_TEXTURE_LOD
+#define ALPHA_TEXTURE_LOD 0
+#endif
+
 RWTexture2D<uint> gHead;
 
 struct BufferData // 4 * 4 byte 
@@ -16,10 +20,12 @@ struct BufferData // 4 * 4 byte
     uint next;
     float depth;
     half4 color;
+    //uint2 color;
+    //float2 color;
 };
 
 RWStructuredBuffer<BufferData> gBuffer;
-RWStructuredBuffer<uint> gCount; // current count for the buffer
+RWBuffer<uint> gCount; // current count for the buffer
 
 cbuffer PerFrame
 {
@@ -37,6 +43,7 @@ float computeShadowImpl(uint2 pixel, uint lightIndex, float3 posW, float3 normal
     return traceShadowRay(posW, normalW, lightIndex);
 }
 
+[earlydepthstencil]
 void psMain(VSOut v, uint triangleIndex : SV_PrimitiveID, float3 barycentrics : SV_Barycentrics, bool isFrontFace : SV_IsFrontFace)
 {
     uint2 pixel = uint2(v.posH.xy);
@@ -46,12 +53,21 @@ void psMain(VSOut v, uint triangleIndex : SV_PrimitiveID, float3 barycentrics : 
     triangleHit.primitiveIndex = triangleIndex;
     triangleHit.barycentrics = barycentrics.yz;
 
+    #if ALPHA_TEXTURE_LOD != 0
+    let lod = ImplicitLodTextureSampler();
+    #else
+    let lod = ExplicitLodTextureSampler(0.0);
+    #endif
+    
+    let material = gScene.materials.getMaterial(v.materialID);
+    float alpha = material.evalOpacity(gScene.materials, v.texC, lod);
+    if (alpha <= 0.01)
+        discard; // no hit
+    
     float3 viewDir = -gScene.camera.computeRayPinhole(pixel, gFrameDim).dir;
-    // TODO optimize by first evaluating alpha and then calculating the color
     float4 shadedColor = shadeVBuffer(triangleHit, pixel, gFrameDim, viewDir);
-    if (shadedColor.a < 0.01)
-        discard;
-
+    shadedColor.a = alpha;
+    
     uint idx = 0xffffffff;
     InterlockedAdd(gCount[0], 1, idx);
     if (idx >= maxElements)
@@ -60,6 +76,7 @@ void psMain(VSOut v, uint triangleIndex : SV_PrimitiveID, float3 barycentrics : 
     BufferData data;
     data.depth = v.posH.z;
     data.color = half4(shadedColor);
+    //data.color = shadedColor.xw;
     // change head pointer to this element, and use previous head as next from this element
     InterlockedExchange(gHead[pixel], idx, data.next);
 
