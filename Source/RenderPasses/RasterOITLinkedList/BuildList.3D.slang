@@ -24,7 +24,7 @@ struct BufferData // 4 * 4 byte
     //float2 color;
 };
 
-RWStructuredBuffer<BufferData> gBuffer;
+globallycoherent RWStructuredBuffer<BufferData> gBuffer;
 RWBuffer<uint> gCount; // current count for the buffer
 
 cbuffer PerFrame
@@ -53,6 +53,8 @@ void psMain(VSOut v, uint triangleIndex : SV_PrimitiveID, float3 barycentrics : 
     triangleHit.primitiveIndex = triangleIndex;
     triangleHit.barycentrics = barycentrics.yz;
 
+    //return;
+
     #if ALPHA_TEXTURE_LOD != 0
     let lod = ImplicitLodTextureSampler();
     #else
@@ -68,13 +70,13 @@ void psMain(VSOut v, uint triangleIndex : SV_PrimitiveID, float3 barycentrics : 
     float4 shadedColor = shadeVBuffer(triangleHit, pixel, gFrameDim, viewDir);
     shadedColor.a = alpha;
     
-    uint idx = 0xffffffff;
+    uint idx = uint(-1);
     InterlockedAdd(gCount[0], 1, idx);
     if (idx >= maxElements)
         discard;
 
     BufferData data;
-    data.depth = v.posH.z;
+    data.depth = v.posH.w;
     data.color = half4(shadedColor);
     //data.color = shadedColor.xw;
     // change head pointer to this element, and use previous head as next from this element

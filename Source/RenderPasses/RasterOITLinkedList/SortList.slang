@@ -10,6 +10,12 @@ struct BufferData // 4 * 4 byte
     //float2 color;
 };
 
+struct FragData
+{
+    half4 color;
+    float depth;
+};
+
 StructuredBuffer<BufferData> gBuffer;
 
 cbuffer PerFrame
@@ -17,6 +23,10 @@ cbuffer PerFrame
     uint2 gFrameDim;
     uint maxElements;
 }
+
+#ifndef MAX_ELEMENT
+#define MAX_ELEMENT 64
+#endif
 
 [numthreads(16, 16, 1)]
 void main(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint3 localId : SV_GroupThreadID)
@@ -30,18 +40,44 @@ void main(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint3 localI
         return;
 
     float4 color = float4(0, 0, 0, 1);
-    uint count = 0;
-    
-    // count items
+
+    FragData a[MAX_ELEMENT];
+    // clear (optional?)
+    uint i;
+    [unroll] for (i = 0; i < MAX_ELEMENT; ++i)
+    {
+        a[i].color = half4(0, 0, 0, 0);
+        a[i].depth = 0.0;
+    }
+
+    // insert from linked list
     uint next = head;
-    while(next < maxElements)
+    uint count = 0;
+    [unroll] for (i = 0; i < MAX_ELEMENT && next < maxElements; ++i)
     {
         BufferData data = gBuffer[next];
         next = data.next;
-        // assume sorted
-        color.rgb += color.a * data.color.a * data.color.rgb;
-        color.a *= (1.0 - data.color.a);
+        a[i].depth = data.depth;
+        a[i].color = data.color;
         count++;
+    }
+
+    // sort
+    [unroll] for (i = 1; i < MAX_ELEMENT && i < count; ++i)
+    {
+        for (int j = 0; j > 0 && a[j - 1].depth > a[j].depth; --j) {
+            let tmp = a[j];
+            a[j] = a[j - 1];
+            a[j - 1] = tmp;
+        }
+    }
+
+    // blend
+    [unroll] for (i = 0; i < MAX_ELEMENT && i < count; ++i)
+    {
+        let f = a[i];
+        color.rgb += f.color.a * f.color.rgb;
+        color.a *= (1.0 - f.color.a);
     }
 
     gColor[pixel] = color;

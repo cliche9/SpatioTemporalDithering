@@ -58,8 +58,7 @@ RasterOITLinkedList::RasterOITLinkedList(ref<Device> pDevice, const Properties& 
     mpState->setDepthStencilState(dsState);
     mpFbo = Fbo::create(mpDevice);
 
-    uint init = 0;
-    mpCountBuffer = Buffer::createStructured(mpDevice, sizeof(uint), 1, ResourceBindFlags::UnorderedAccess | ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, &init, false);
+    mpCountBuffer = Buffer::createStructured(mpDevice, sizeof(uint), 1, ResourceBindFlags::UnorderedAccess | ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, nullptr, false);
 
     // sort pass
     Program::Desc desc;
@@ -95,6 +94,9 @@ void RasterOITLinkedList::execute(RenderContext* pRenderContext, const RenderDat
     pRenderContext->clearTexture(pColor.get(), float4(0, 0, 0, 1));
     pRenderContext->clearUAV(pHead->getUAV().get(), uint4(uintmax));
     pRenderContext->clearUAV(mpCountBuffer->getUAV(0, 1).get(), uint4(0));
+
+    pRenderContext->uavBarrier(mpCountBuffer.get());
+    pRenderContext->uavBarrier(pHead.get());
 
     if (!mpScene)
     {
@@ -135,7 +137,7 @@ void RasterOITLinkedList::execute(RenderContext* pRenderContext, const RenderDat
             whitelist = renderData.getDictionary().getValue<decltype(whitelist)>(kWhitelist);
 
         mpState->setProgram(mpProgram);
-        mpScene->rasterizeDynamic(pRenderContext, mpState.get(), mpVars.get(), RasterizerState::CullMode::None,
+        /*mpScene->rasterizeDynamic(pRenderContext, mpState.get(), mpVars.get(), RasterizerState::CullMode::None,
             [&](const MeshDesc& meshDesc, const Material& material)
             {
                 if (material.isOpaque()) return false;
@@ -144,9 +146,10 @@ void RasterOITLinkedList::execute(RenderContext* pRenderContext, const RenderDat
                 std::string name = material.getName();
                 // draw if not in whitelist (=> alpha tested)
                 return whitelist.find(name) != whitelist.end();
-            });
+            });*/
+        mpScene->rasterize(pRenderContext, mpState.get(), mpVars.get(), RasterizerState::CullMode::None, RasterizerState::MeshRenderMode::SkipOpaque);
     }
-
+    //return;
     {
         FALCOR_PROFILE(pRenderContext, "Sort and Blend");
         auto vars = mpSortPass->getRootVar();
