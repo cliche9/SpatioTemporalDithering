@@ -1,3 +1,5 @@
+#include "Utils/Math/MathConstants.slangh"
+
 RWTexture2D<float4> gColor;
 Texture2D<uint> gHead;
 
@@ -5,14 +7,25 @@ struct BufferData // 4 * 4 byte
 {
     uint next;
     float depth;
-    half4 color;
-    //uint2 color;
+    //half4 color;
+    uint2 color;
     //float2 color;
 };
 
+float2 unpackHalf(uint c)
+{
+    return float2(f16tof32(c), f16tof32(c >> 16));
+}
+
+float4 unpackHalf4(uint2 c)
+{
+    return float4(unpackHalf(c.r), unpackHalf(c.g));
+}
+
 struct FragData
 {
-    half4 color;
+    // half4 color;
+    uint2 color;
     float depth;
 };
 
@@ -28,7 +41,7 @@ cbuffer PerFrame
 #define MAX_ELEMENT 64
 #endif
 
-[numthreads(16, 16, 1)]
+[numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint3 localId : SV_GroupThreadID)
 {
     uint2 pixel = id.xy;
@@ -46,8 +59,8 @@ void main(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint3 localI
     uint i;
     [unroll] for (i = 0; i < MAX_ELEMENT; ++i)
     {
-        a[i].color = half4(0, 0, 0, 0);
-        a[i].depth = 0.0;
+        a[i].color = 0u;
+        a[i].depth = FLT_MAX;
     }
 
     // insert from linked list
@@ -63,9 +76,9 @@ void main(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint3 localI
     }
 
     // sort
-    [unroll] for (i = 1; i < MAX_ELEMENT && i < count; ++i)
+    for (i = 1; i < MAX_ELEMENT && i < count; ++i)
     {
-        for (int j = 0; j > 0 && a[j - 1].depth > a[j].depth; --j) {
+        for (int j = i; j > 0 && a[j - 1].depth > a[j].depth; --j) {
             let tmp = a[j];
             a[j] = a[j - 1];
             a[j - 1] = tmp;
@@ -75,9 +88,9 @@ void main(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint3 localI
     // blend
     [unroll] for (i = 0; i < MAX_ELEMENT && i < count; ++i)
     {
-        let f = a[i];
-        color.rgb += f.color.a * f.color.rgb;
-        color.a *= (1.0 - f.color.a);
+        float4 fcolor = unpackHalf4(a[i].color);
+        color.rgb += color.a * fcolor.a * fcolor.rgb;
+        color.a *= (1.0 - fcolor.a);
     }
 
     gColor[pixel] = color;

@@ -19,10 +19,20 @@ struct BufferData // 4 * 4 byte
 {
     uint next;
     float depth;
-    half4 color;
+    uint2 color;
     //uint2 color;
     //float2 color;
 };
+
+int packHalf(float a, float b)
+{
+    return f32tof16(a) | (f32tof16(b) << 16);
+}
+
+uint2 packHalf4(float4 color)
+{
+    return uint2(packHalf(color.r, color.g), packHalf(color.b, color.a));
+}
 
 globallycoherent RWStructuredBuffer<BufferData> gBuffer;
 RWBuffer<uint> gCount; // current count for the buffer
@@ -77,7 +87,7 @@ void psMain(VSOut v, uint triangleIndex : SV_PrimitiveID, float3 barycentrics : 
 
     BufferData data;
     data.depth = v.posH.w;
-    data.color = half4(shadedColor);
+    data.color = packHalf4(shadedColor); //half4(shadedColor);
     //data.color = shadedColor.xw;
     // change head pointer to this element, and use previous head as next from this element
     InterlockedExchange(gHead[pixel], idx, data.next);
