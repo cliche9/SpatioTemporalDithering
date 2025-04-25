@@ -6,6 +6,7 @@ target_sources(RasterOITDynFragment PRIVATE
     BuildList.3D.slang
     scan.hlsl
     scanpush.hlsl
+    Sort.slang
 )
 
 target_copy_shaders(RasterOITDynFragment RenderPasses/RasterOITDynFragment)

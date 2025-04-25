@@ -38,7 +38,7 @@ namespace
     const std::string kWhitelist = "whitelist";
 
     const std::string kProgramFile = "RenderPasses/RasterOITDynFragment/BuildList.3D.slang";
-    const std::string kSortFile = "RenderPasses/RasterOITDynFragment/SortList.slang";
+    const std::string kSortFile = "RenderPasses/RasterOITDynFragment/Sort.slang";
     const std::string kScanFile = "RenderPasses/RasterOITDynFragment/scan.hlsl";
     const std::string kScanPushFile = "RenderPasses/RasterOITDynFragment/scanpush.hlsl";
 }
@@ -60,14 +60,10 @@ RasterOITDynFragment::RasterOITDynFragment(ref<Device> pDevice, const Properties
     mpState->setDepthStencilState(dsState);
     mpFbo = Fbo::create(mpDevice);
 
-    // sort pass
-    //Program::Desc desc;
-    //desc.addShaderLibrary(kSortFile).csEntry("main").setShaderModel("6_5");
-
-    //mpSortPass = ComputePass::create(mpDevice, desc);
-
     mpScanPass = ComputePass::create(mpDevice, kScanFile);
     mpScanPushPass = ComputePass::create(mpDevice, kScanPushFile);
+
+    mpSortPass = ComputePass::create(mpDevice, kSortFile);
 }
 
 Properties RasterOITDynFragment::getProperties() const
@@ -149,8 +145,6 @@ void RasterOITDynFragment::execute(RenderContext* pRenderContext, const RenderDa
     // setup vars and program
     auto vars = mpVars->getRootVar();
     vars["gCounts"] = mpCountBuffer;
-    vars["gBuffer"] = mpDataBuffer;
-    vars["gPrefix"] = m_scanAuxBuffer.front();
 
     vars["PerFrame"]["gFrameDim"] = dim;
     vars["PerFrame"]["maxElements"] = mpDataBuffer->getElementCount();
@@ -168,6 +162,8 @@ void RasterOITDynFragment::execute(RenderContext* pRenderContext, const RenderDa
         mpState->setProgram(mpProgram);
 
         mpScene->rasterizeFrustumCulling(pRenderContext, mpState.get(), mpVars.get(), RasterizerState::CullMode::None, RasterizerState::MeshRenderMode::SkipOpaque, true, mpCulling);
+
+        pRenderContext->uavBarrier(mpCountBuffer.get()); // counts need to be finalized before scan
     }
 
     // scan counters
@@ -177,6 +173,9 @@ void RasterOITDynFragment::execute(RenderContext* pRenderContext, const RenderDa
     {
         FALCOR_PROFILE(pRenderContext, "Record");
 
+        vars["gBuffer"] = mpDataBuffer;
+        vars["gPrefix"] = m_scanAuxBuffer.front();
+
         mpProgram->removeDefine("COUNT");
         mpState->setProgram(mpProgram);
 
@@ -184,6 +183,20 @@ void RasterOITDynFragment::execute(RenderContext* pRenderContext, const RenderDa
     }
 
     // sort fragments
+    {
+        FALCOR_PROFILE(pRenderContext, "Sort");
+        pRenderContext->uavBarrier(mpDataBuffer.get());
+
+        auto sortVars = mpSortPass->getRootVar();
+        sortVars["gBuffer"] = mpDataBuffer;
+        sortVars["gPrefix"] = m_scanAuxBuffer.front();
+        sortVars["gColor"] = pColor;
+
+        sortVars["PerFrame"]["gFrameDim"] = dim;
+        sortVars["PerFrame"]["maxFragmentCount"] = mpDataBuffer->getElementCount();
+
+        mpSortPass->execute(pRenderContext, dim.x, dim.y);
+    }
     
 }
 

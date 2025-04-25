@@ -14,7 +14,7 @@ import Utils.Math.FormatConversion;
 #endif
 
 RWStructuredBuffer<uint> gCounts; // all passes
-RWStructuredBuffer<uint> gPrefix; // start indices for each list (record only)
+StructuredBuffer<uint> gPrefix; // start indices for each list (record only)
 
 struct BufferData // 4 * 4 byte 
 {
