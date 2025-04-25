@@ -4,6 +4,8 @@ target_sources(RasterOITDynFragment PRIVATE
     RasterOITDynFragment.cpp
     RasterOITDynFragment.h
     BuildList.3D.slang
+    scan.hlsl
+    scanpush.hlsl
 )
 
 target_copy_shaders(RasterOITDynFragment RenderPasses/RasterOITDynFragment)

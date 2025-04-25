@@ -39,6 +39,8 @@ namespace
 
     const std::string kProgramFile = "RenderPasses/RasterOITDynFragment/BuildList.3D.slang";
     const std::string kSortFile = "RenderPasses/RasterOITDynFragment/SortList.slang";
+    const std::string kScanFile = "RenderPasses/RasterOITDynFragment/scan.hlsl";
+    const std::string kScanPushFile = "RenderPasses/RasterOITDynFragment/scanpush.hlsl";
 }
 
 
@@ -63,6 +65,9 @@ RasterOITDynFragment::RasterOITDynFragment(ref<Device> pDevice, const Properties
     //desc.addShaderLibrary(kSortFile).csEntry("main").setShaderModel("6_5");
 
     //mpSortPass = ComputePass::create(mpDevice, desc);
+
+    mpScanPass = ComputePass::create(mpDevice, kScanFile);
+    mpScanPushPass = ComputePass::create(mpDevice, kScanPushFile);
 }
 
 Properties RasterOITDynFragment::getProperties() const
@@ -80,16 +85,17 @@ RenderPassReflection RasterOITDynFragment::reflect(const CompileData& compileDat
     return reflector;
 }
 
+void RasterOITDynFragment::compile(RenderContext* pRenderContext, const CompileData& compileData)
+{
+    setupScanBuffer(compileData.defaultTexDims);
+}
+
 void RasterOITDynFragment::execute(RenderContext* pRenderContext, const RenderData& renderData)
 {
     auto pDepth = renderData.getTexture(kDepth);
     auto pColor = renderData.getTexture(kColor);
 
     uint2 dim = uint2(pDepth->getWidth(), pDepth->getHeight());
-    setupCountBuffer(mpCountBuffer, dim);
-    mpCountBuffer->setName("CountBuffer");
-    setupCountBuffer(mpPrefixBuffer, dim);
-    mpPrefixBuffer->setName("PrefixBuffer");
 
     // clear resources
     uint32_t uintmax = uint32_t(-1);
@@ -144,7 +150,7 @@ void RasterOITDynFragment::execute(RenderContext* pRenderContext, const RenderDa
     auto vars = mpVars->getRootVar();
     vars["gCounts"] = mpCountBuffer;
     vars["gBuffer"] = mpDataBuffer;
-    vars["gPrefix"] = mpPrefixBuffer;
+    vars["gPrefix"] = m_scanAuxBuffer.front();
 
     vars["PerFrame"]["gFrameDim"] = dim;
     vars["PerFrame"]["maxElements"] = mpDataBuffer->getElementCount();
@@ -165,6 +171,7 @@ void RasterOITDynFragment::execute(RenderContext* pRenderContext, const RenderDa
     }
 
     // scan counters
+    performScan(pRenderContext);
 
     // record fragments
     {
@@ -173,7 +180,7 @@ void RasterOITDynFragment::execute(RenderContext* pRenderContext, const RenderDa
         mpProgram->removeDefine("COUNT");
         mpState->setProgram(mpProgram);
 
-        //mpScene->rasterizeFrustumCulling(pRenderContext, mpState.get(), mpVars.get(), RasterizerState::CullMode::None, RasterizerState::MeshRenderMode::SkipOpaque, true, mpCulling);
+        mpScene->rasterizeFrustumCulling(pRenderContext, mpState.get(), mpVars.get(), RasterizerState::CullMode::None, RasterizerState::MeshRenderMode::SkipOpaque, true, mpCulling);
     }
 
     // sort fragments
@@ -194,11 +201,93 @@ void RasterOITDynFragment::setScene(RenderContext* pRenderContext, const ref<Sce
     mpCulling = nullptr;
 }
 
-void RasterOITDynFragment::setupCountBuffer(ref<Buffer>& buffer, uint2 res) const
+void RasterOITDynFragment::setupScanBuffer(uint2 res)
 {
-    if (buffer == nullptr || buffer->getElementCount() != res.x * res.y)
+    auto size = size_t(res.x) * size_t(res.y);
+    const auto alignment = s_scanWorkgroup * s_scanLocal;
+    m_curScanSize = GetAligned(size, alignment);
+    m_scanLastIdx = size - 1;
+
+    mpCountBuffer = Buffer::createStructured(mpDevice, sizeof(uint), GetAligned(m_curScanSize, 4), ResourceBindFlags::UnorderedAccess | ResourceBindFlags::ShaderResource);
+    mpCountBuffer->setName("CountBuffer");
+
+    m_scanAuxBuffer.clear();
+    auto bs = m_curScanSize;
+    while (bs > 1)
     {
-        buffer = Buffer::createStructured(mpDevice, sizeof(uint), res.x * res.y, ResourceBindFlags::UnorderedAccess | ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None);
+        m_scanAuxBuffer.emplace_back(
+            Buffer::createStructured(mpDevice, sizeof(uint32_t), GetAligned(bs, 4), ResourceBindFlags::UnorderedAccess | ResourceBindFlags::ShaderResource));
+        bs /= alignment;
+    }
+
+    m_scanAuxBuffer.front()->setName("ScanAuxBuffer0");
+}
+
+void RasterOITDynFragment::performScan(RenderContext* pRenderContext)
+{
+    FALCOR_PROFILE(pRenderContext, "Scan");
+
+    auto bs = m_curScanSize;
+    int i = 0;
+    const auto elemPerWk = s_scanWorkgroup * s_scanLocal;
+
+    {
+        auto scanVars = mpScanPass->getRootVar();
+        // write to aux
+        scanVars["BufferData"]["u_writeAux"] = 1;
+
+        // hierarchical scan of blocks
+        while (bs > 1)
+        {
+            // set source
+            if (i == 0)
+                scanVars["in_buffer"] = mpCountBuffer;
+            else
+                scanVars["in_buffer"] = m_scanAuxBuffer[i];
+
+            // set destination
+            scanVars["data"] = m_scanAuxBuffer[i];
+
+            // Bind the auxiliary buffer for the next step 
+            if (size_t(i + 1) < m_scanAuxBuffer.size())
+                scanVars["aux"] = m_scanAuxBuffer[i + 1];
+            else scanVars["BufferData"]["u_writeAux"] = 0; // don't write to aux
+
+            scanVars["BufferData"]["u_bufferSize"] = m_scanAuxBuffer.at(i)->getElementCount();
+
+            // perform scan
+            mpScanPass->execute(pRenderContext, ((bs + elemPerWk - 1) / elemPerWk), 1, 1);
+
+            pRenderContext->uavBarrier(m_scanAuxBuffer[i].get());
+            if (size_t(i + 1) < m_scanAuxBuffer.size())
+                pRenderContext->uavBarrier(m_scanAuxBuffer[i + 1].get());
+
+            bs /= elemPerWk;
+            ++i;
+        }
+    }
+
+    auto pushVars = mpScanPushPass->getRootVar();
+
+    pushVars["BufferData"]["u_stride"] = elemPerWk;
+    //commands.SetComputeRoot32BitConstant(m_scanConstantsIdx, 0, 1);
+
+    --i; bs = m_curScanSize;
+    while (bs > elemPerWk) bs /= elemPerWk;
+    while (bs < m_curScanSize)
+    {
+        bs *= elemPerWk;
+
+        pushVars["aux_data"] = m_scanAuxBuffer[i];
+        pushVars["data"] = m_scanAuxBuffer[i - 1];
+
+        //if (i == 1) // last write
+        //    commands.SetComputeRoot32BitConstant(m_scanConstantsIdx, UINT(m_scanLastIdx), 1);
+
+        mpScanPushPass->execute(pRenderContext, ((bs - elemPerWk) / 64), 1, 1);
+
+        --i;
+        pRenderContext->uavBarrier(m_scanAuxBuffer[i].get());
     }
 }
 

@@ -42,7 +42,7 @@ public:
 
     virtual Properties getProperties() const override;
     virtual RenderPassReflection reflect(const CompileData& compileData) override;
-    virtual void compile(RenderContext* pRenderContext, const CompileData& compileData) override {}
+    virtual void compile(RenderContext* pRenderContext, const CompileData& compileData) override;
     virtual void execute(RenderContext* pRenderContext, const RenderData& renderData) override;
     virtual void renderUI(Gui::Widgets& widget) override;
     virtual void setScene(RenderContext* pRenderContext, const ref<Scene>& pScene) override;
@@ -50,8 +50,13 @@ public:
     virtual bool onKeyEvent(const KeyboardEvent& keyEvent) override { return false; }
 
 private:
-    void setupCountBuffer(ref<Buffer>& buffer, uint2 res) const;
+    void setupScanBuffer(uint2 res);
+    void performScan(RenderContext* pRenderContext);
     void setupProgram();
+    static UINT64 GetAligned(UINT64 size, UINT64 alignment)
+    {
+        return (size / alignment + !!(size % alignment)) * alignment;
+    }
 
     ref<Scene> mpScene;
 
@@ -60,12 +65,20 @@ private:
     ref<GraphicsVars> mpVars;
     ref<Fbo> mpFbo;
 
+    ref<ComputePass> mpScanPass;
+    ref<ComputePass> mpScanPushPass;
+
     ref<ComputePass> mpSortPass;
 
     ref<Buffer> mpDataBuffer;
     ref<Buffer> mpCountBuffer;
-    ref<Buffer> mpPrefixBuffer;
 
     uint mDataBufferSize = 1024 * 1024 * 40;
     ref<FrustumCulling> mpCulling;
+
+    static const UINT64 s_scanWorkgroup = 1024;
+    static const UINT64 s_scanLocal = 8;
+    UINT64 m_curScanSize = 0;
+    UINT64 m_scanLastIdx = 0;
+    std::vector<ref<Buffer>> m_scanAuxBuffer;
 };
