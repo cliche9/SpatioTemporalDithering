@@ -66,14 +66,19 @@ void main(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint3 localI
 //#undef MAX_FRAGMENT
 #ifdef MAX_FRAGMENT
     if (numFragments > MAX_FRAGMENT) return; // this is handled by a different shader
+#if MAX_FRAGMENT > 8
 #define IN_LIST(i) i < numFragments
+#else
+// no early out is faster for very small lists
+#define IN_LIST(i) true
+#endif
 
 	// load fragments into registers
 	Fragment f[MAX_FRAGMENT];
 	Fragment emptyFrag;
 	emptyFrag.depth = FLOAT_MAX;
 	emptyFrag.color = 0;
-	[unroll] for(uint i = 0; i < MAX_FRAGMENT; ++i)
+	[unroll] for(uint i = 0; i < MAX_FRAGMENT && IN_LIST(i); ++i)
     {
         [flatten] if (i < numFragments)
         {

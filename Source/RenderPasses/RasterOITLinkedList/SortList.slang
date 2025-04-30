@@ -65,18 +65,11 @@ void main(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint3 localI
 
     // load fragments into registers
     FragData f[MAX_FRAGMENT];
-    // clear (optional?)
-    uint i;
-    [unroll] for (i = 0; i < MAX_FRAGMENT; ++i)
-    {
-        f[i].color = 0u;
-        f[i].depth = FLT_MAX;
-    }
 
     // insert from linked list
     uint next = head;
     uint count = 0;
-    [unroll] for (i = 0; i < MAX_FRAGMENT && next < maxElements; ++i)
+    [unroll] for (uint i = 0; i < MAX_FRAGMENT && next < maxElements; ++i)
     {
         BufferData data = gBuffer[next];
         next = data.next;
@@ -86,6 +79,7 @@ void main(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint3 localI
     }
 
 #define IN_LIST(i) i < count
+
 #if MAX_FRAGMENT < 32
 
     // sort registers (insertion sort)
