@@ -27,31 +27,17 @@
  **************************************************************************/
 #include "TAA.h"
 
-#include "RenderGraph/RenderPassStandardFlags.h"
-
 namespace
 {
     const std::string kMotionVec = "motionVecs";
     const std::string kColorIn = "colorIn";
-    const std::string kTaaOut = "taaOut"; // reprojected color from previous frame
     const std::string kColorOut = "colorOut";
-
-    const std::string kAlphaTex = "alphaTex";
-    const std::string kAlphaTexPingPing = "alphaPong";
-
-    const std::string kLinearZ = "linearZ";
-    const std::string kVBuffer = "vbuffer";
-    const std::string kPrevLinearZ = "prevLinearZ";
-    //const std::string kNormals = "normals";
-    //const std::string kMeshId = "meshId";
 
     const std::string kAlpha = "alpha";
     const std::string kColorBoxSigma = "colorBoxSigma";
     const std::string kAntiFlicker = "antiFlicker";
 
     const std::string kShaderFilename = "RenderPasses/TAA/TAA.ps.slang";
-    const std::string kBlurShaderFilename = "RenderPasses/TAA/Blur.ps.slang";
-    const std::string kBlendShaderFilename = "RenderPasses/TAA/Blend.ps.slang";
 }
 
 static void regTAA(pybind11::module& m)
@@ -71,14 +57,11 @@ extern "C" FALCOR_API_EXPORT void registerPlugin(Falcor::PluginRegistry & regist
 TAA::TAA(ref<Device> pDevice, const Properties& props)
     : RenderPass(pDevice)
 {
-    mpBlurPass = FullScreenPass::create(pDevice, kBlurShaderFilename);
-    mpBlendPass = FullScreenPass::create(pDevice, kBlendShaderFilename);
+    mpPass = FullScreenPass::create(mpDevice, kShaderFilename);
     mpFbo = Fbo::create(mpDevice);
     Sampler::Desc samplerDesc;
     samplerDesc.setFilterMode(Sampler::Filter::Linear, Sampler::Filter::Linear, Sampler::Filter::Linear);
     mpLinearSampler = Sampler::create(mpDevice, samplerDesc);
-    samplerDesc.setFilterMode(Sampler::Filter::Point, Sampler::Filter::Point, Sampler::Filter::Point);
-    mpPointSampler = Sampler::create(mpDevice, samplerDesc);
 
     for (const auto& [key, value] : props)
     {
@@ -103,151 +86,43 @@ RenderPassReflection TAA::reflect(const CompileData& compileData)
     RenderPassReflection reflection;
     reflection.addInput(kMotionVec, "Screen-space motion vectors");
     reflection.addInput(kColorIn, "Color-buffer of the current frame");
-
-    // optional inputs
-    reflection.addInput(kLinearZ, "Linear depth buffer").flags(RenderPassReflection::Field::Flags::Optional);
-    reflection.addInput(kPrevLinearZ, "Linear depth buffer of the previous frame").flags(RenderPassReflection::Field::Flags::Optional);
-    reflection.addInput(kVBuffer, "V-buffer").flags(RenderPassReflection::Field::Flags::Optional);
-
-    reflection.addInternal(kAlphaTexPingPing, "internal ping pong for blurring alpha tex").format(ResourceFormat::R8Unorm);
-
-    reflection.addOutput(kTaaOut, "Reprojected color from the previous frame");
     reflection.addOutput(kColorOut, "Anti-aliased color buffer");
-    reflection.addOutput(kAlphaTex, "Alpha values used for weighting the current frame").format(ResourceFormat::R8Unorm); // TODO optional
     return reflection;
 }
 
 void TAA::execute(RenderContext* pRenderContext, const RenderData& renderData)
 {
-    // update timer
-    mTimer.update();
-    mPreviousDelta = mCurrentDelta;
-    mCurrentDelta = mTimer.delta();
-
-    // get resources
     const auto& pColorIn = renderData.getTexture(kColorIn);
     const auto& pColorOut = renderData.getTexture(kColorOut);
     const auto& pMotionVec = renderData.getTexture(kMotionVec);
-    const auto& pTaaOut = renderData.getTexture(kTaaOut);
-    const auto& pAlphaPingPing = renderData.getTexture(kAlphaTexPingPing);
-    auto pLinearZ = renderData.getTexture(kLinearZ);
-    auto pPrevLinearZ = renderData.getTexture(kPrevLinearZ);
-    auto pAlphaTex = renderData.getTexture(kAlphaTex);
-    auto pVBuffer = renderData.getTexture(kVBuffer);
-
-    if (!pLinearZ || !pPrevLinearZ) mControls.rejectOccluded = false; // cannot use this without the depth buffers
-
-    if(!mEnabled || !mpPass)
+    if(!mEnabled)
     {
         pRenderContext->blit(pColorIn->getSRV(), pColorOut->getRTV());
         return;
     }
-    
-    allocatePrevColorAndHistory(pColorOut.get());
-    //mpFbo->attachColorTarget(pColorOut, 0);
-    mpFbo->attachColorTarget(pAlphaTex, 1);
-    mpFbo->attachColorTarget(pTaaOut, 2);
+
+    allocatePrevColor(pColorOut.get());
+    mpFbo->attachColorTarget(pColorOut, 0);
 
     // Make sure the dimensions match
     FALCOR_ASSERT((pColorIn->getWidth() == mpPrevColor->getWidth()) && (pColorIn->getWidth() == pMotionVec->getWidth()));
     FALCOR_ASSERT((pColorIn->getHeight() == mpPrevColor->getHeight()) && (pColorIn->getHeight() == pMotionVec->getHeight()));
     FALCOR_ASSERT(pColorIn->getSampleCount() == 1 && mpPrevColor->getSampleCount() == 1 && pMotionVec->getSampleCount() == 1);
 
-    {
-        FALCOR_PROFILE(pRenderContext, "TAA");
+    auto var = mpPass->getRootVar();
+    var["PerFrameCB"]["gAlpha"] = mControls.alpha;
+    var["PerFrameCB"]["gColorBoxSigma"] = mControls.colorBoxSigma;
+    var["PerFrameCB"]["gAntiFlicker"] = mControls.antiFlicker;
+    var["gTexColor"] = pColorIn;
+    var["gTexMotionVec"] = pMotionVec;
+    var["gTexPrevColor"] = mpPrevColor;
+    var["gSampler"] = mpLinearSampler;
 
-        auto var = mpPass->getRootVar();
-        var["PerFrameCB"]["gAlpha"] = mControls.alpha;
-        var["PerFrameCB"]["gColorBoxSigma"] = mControls.colorBoxSigma;
-        var["PerFrameCB"]["gAntiFlicker"] = mControls.antiFlicker;
-        var["PerFrameCB"]["gUseMaxMotionVector"] = mControls.useMaxMotionVector;
-        var["PerFrameCB"]["gUseColorVariance"] = mControls.useColorVariance;
-        var["PerFrameCB"]["gBicubicColorFetch"] = mControls.bicubicColorFetch;
-        var["PerFrameCB"]["gUseClipping"] = mControls.useClipping;
-        var["PerFrameCB"]["gRectifyColor"] = mControls.rectifyColor;
-        var["PerFrameCB"]["gRejectOccluded"] = mControls.rejectOccluded;
-        var["PerFrameCB"]["gRejectMotion"] = mControls.rejectMotion;
-        var["PerFrameCB"]["gRejectVBufferMotion"] = mControls.rejectVBufferMotion;
-        var["PerFrameCB"]["gPrevFrameDelta"] = std::max(mPreviousDelta, 0.000001f);
-        var["PerFrameCB"]["gCurFrameDelta"] = std::max(mCurrentDelta, 0.000001f);
-        var["PerFrameCB"]["gColorStatRadius"] = mControls.colorStatRadius;
-        var["gTexColor"] = pColorIn;
-        var["gTexMotionVec"] = pMotionVec;
-        var["gTexPrevMotionVec"] = mpPrevMotion;
-        var["gTexPrevColor"] = mpPrevColor;
-        var["gTexLinearZ"] = pLinearZ;
-        var["gTexPrevLinearZPixel"] = pPrevLinearZ;
-        var["gTexPrevLinearZ"] = mpPrevLinearZ;
-        var["gTexVBuffer"] = pVBuffer;
-        var["gTexPrevVBuffer"] = mpPrevVBuffer;
-        var["gSampler"] = mpLinearSampler;
-        // set the gScene variable: (even though this does not require ray tracing)
-        mpScene->setRaytracingShaderData(pRenderContext, var);
-
-        mpPass->execute(pRenderContext, mpFbo);
-    }
-
-    // blur the alpha texture
-    if(mControls.blurRadius > 0)
-    {
-        FALCOR_PROFILE(pRenderContext, "Blur Alpha");
-        mpFbo->attachColorTarget(pAlphaPingPing, 0);
-        mpFbo->attachColorTarget(nullptr, 1);
-        mpFbo->attachColorTarget(nullptr, 2);
-
-        auto var = mpBlurPass->getRootVar();
-
-        var["gAlpha"] = pAlphaTex;
-        var["gSampler"] = mpPointSampler;
-        var["PerFrameCB"]["radius"] = mControls.blurRadius;
-        var["PerFrameCB"]["dir"] = float2(1, 0);
-        mpBlurPass->execute(pRenderContext, mpFbo);
-
-        mpFbo->attachColorTarget(pAlphaTex, 0);
-        var["gAlpha"] = pAlphaPingPing;
-        var["PerFrameCB"]["dir"] = float2(0, 1);
-        mpBlurPass->execute(pRenderContext, mpFbo);
-    }
-
-    {
-        FALCOR_PROFILE(pRenderContext, "Blend");
-
-        mpFbo->attachColorTarget(pColorOut, 0);
-        mpFbo->attachColorTarget(nullptr, 1);
-        mpFbo->attachColorTarget(nullptr, 2);
-
-        auto var = mpBlendPass->getRootVar();
-        var["gCurColor"] = pColorIn;
-        var["gTaaColor"] = pTaaOut;
-        var["gAlpha"] = pAlphaTex;
-        // var["gFxaaColor"] = nullptr; // TODO
-
-        mpBlendPass->execute(pRenderContext, mpFbo);
-    }
-
-    {
-        FALCOR_PROFILE(pRenderContext, "Blit Histories");
-        pRenderContext->blit(pColorOut->getSRV(), mpPrevColor->getRTV());
-
-        if (pLinearZ)
-        {
-            pRenderContext->blit(pLinearZ->getSRV(), mpPrevLinearZ->getRTV()); // save depth values for the next frame to detect occlusions/disocclusions   
-        }
-        if (pVBuffer)
-        {
-            pRenderContext->blit(pVBuffer->getSRV(), mpPrevVBuffer->getRTV());
-        }
-        pRenderContext->blit(pMotionVec->getSRV(), mpPrevMotion->getRTV());
-    }
-
-    if(mClear)
-    {
-        pRenderContext->blit(pColorIn->getSRV(), mpPrevColor->getRTV());
-        mClear = false;
-    }
+    mpPass->execute(pRenderContext, mpFbo);
+    pRenderContext->blit(pColorOut->getSRV(), mpPrevColor->getRTV());
 }
 
-void TAA::allocatePrevColorAndHistory(const Texture* pColorOut)
+void TAA::allocatePrevColor(const Texture* pColorOut)
 {
     bool allocate = mpPrevColor == nullptr;
     allocate = allocate || (mpPrevColor->getWidth() != pColorOut->getWidth());
@@ -256,71 +131,14 @@ void TAA::allocatePrevColorAndHistory(const Texture* pColorOut)
     allocate = allocate || (mpPrevColor->getFormat() != pColorOut->getFormat());
     FALCOR_ASSERT(pColorOut->getSampleCount() == 1);
 
-    if (!allocate) return;
-    mpPrevColor = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), pColorOut->getFormat(), 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
-    mpPrevMotion = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), ResourceFormat::RG32Float, 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
-    mpPrevLinearZ = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), ResourceFormat::R32Float, 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
-    mpPrevVBuffer = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), ResourceFormat::RGBA32Uint, 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
+    if (allocate) mpPrevColor = Texture::create2D(mpDevice, pColorOut->getWidth(), pColorOut->getHeight(), pColorOut->getFormat(), 1, 1, nullptr, Resource::BindFlags::RenderTarget | Resource::BindFlags::ShaderResource);
 }
 
 void TAA::renderUI(Gui::Widgets& widget)
 {
-    auto boolDropdown = [&](const char* displayName, bool& value, const char* falseName, const char* trueName)
-    {
-        auto dropdown = {
-            Gui::DropdownValue{0, falseName},
-            Gui::DropdownValue{1, trueName}
-        };
-
-        uint v = (value ? 1 : 0);
-        widget.dropdown(displayName, dropdown, v);
-        value = (v != 0);
-    };
-
     widget.checkbox("Enabled", mEnabled);
     if(!mEnabled) return;
-
-
-    widget.checkbox("Max Motion Vector (3x3)", mControls.useMaxMotionVector);
-
-    widget.checkbox("Rectify Color", mControls.rectifyColor);
-
-    if (mControls.rectifyColor)
-    {
-        boolDropdown("Color-Box", mControls.useColorVariance, "BoundingBox", "Variance");
-        if (mControls.useColorVariance)
-        {
-            widget.var("Color-Box Sigma", mControls.colorBoxSigma, 0.f, 15.f, 0.001f);
-        }
-
-        boolDropdown("ClipMode", mControls.useClipping, "Clamp", "Clip");
-
-        widget.var("Color Stat Radius", mControls.colorStatRadius, 1, 5);
-    }
-
-    boolDropdown("Color Fetch", mControls.bicubicColorFetch, "Bilinear", "Bicubic");
-
     widget.var("Alpha", mControls.alpha, 0.f, 1.0f, 0.001f);
+    widget.var("Color-Box Sigma", mControls.colorBoxSigma, 0.f, 15.f, 0.001f);
     widget.checkbox("Anti Flicker", mControls.antiFlicker);
-    
-
-    widget.checkbox("Reject Occluded", mControls.rejectOccluded);
-    widget.checkbox("Reject Motion", mControls.rejectMotion);
-    widget.checkbox("Reject VBuffer Motion", mControls.rejectVBufferMotion);
-
-    widget.slider("Alpha Blur Radius", mControls.blurRadius, 0, 10);
-
-    if (widget.button("Clear"))
-        mClear = true;
-}
-
-void TAA::setScene(RenderContext* pRenderContext, const ref<Scene>& pScene)
-{
-    mpScene = pScene;
-    mpPass.reset();
-    if(mpScene)
-    {
-        auto defines = mpScene->getSceneDefines();
-        mpPass = FullScreenPass::create(mpDevice, kShaderFilename, defines);
-    }
 }

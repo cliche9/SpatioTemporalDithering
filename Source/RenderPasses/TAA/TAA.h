@@ -47,7 +47,6 @@ public:
     virtual RenderPassReflection reflect(const CompileData& compileData) override;
     virtual void execute(RenderContext* pRenderContext, const RenderData& renderData) override;
     virtual void renderUI(Gui::Widgets& widget) override;
-    void setScene(RenderContext* pRenderContext, const ref<Scene>& pScene) override;
 
     void setAlpha(float alpha) { mControls.alpha = alpha; }
     void setColorBoxSigma(float sigma) { mControls.colorBoxSigma = sigma; }
@@ -57,43 +56,19 @@ public:
     bool getAntiFlicker() { return mControls.antiFlicker; }
 
 private:
-    void allocatePrevColorAndHistory(const Texture* pColorOut);
+    void allocatePrevColor(const Texture* pColorOut);
 
     ref<FullScreenPass> mpPass;
-    ref<FullScreenPass> mpBlurPass;
-    ref<FullScreenPass> mpBlendPass;
     ref<Fbo> mpFbo;
     ref<Sampler> mpLinearSampler;
-    ref<Sampler> mpPointSampler;
 
     struct
     {
         float alpha = 0.1f;
         float colorBoxSigma = 1.0f;
-        int colorStatRadius = 1; // radius in which to gather local statistics (color box or color variance)
         bool antiFlicker = false;
-        bool useMaxMotionVector = false;
-        bool rectifyColor = true; // otherwise color will be taken as is
-        bool useColorVariance = true; // otherwise color bounding box
-        bool bicubicColorFetch = true; // otherwise bilinear
-        bool useClipping = false; // otherwise use clamping
-        bool rejectOccluded = false;
-        bool rejectMotion = false; // reject if motion change is too strong
-        bool rejectVBufferMotion = false; // reject if previous vbuffer entry moved
-        int blurRadius = 1;
     } mControls;
 
     ref<Texture> mpPrevColor;
-    ref<Texture> mpPrevMotion;
-    ref<Texture> mpPrevLinearZ;
-    ref<Texture> mpPrevVBuffer;
-
-    ref<Scene> mpScene;
-
-    CpuTimer mTimer;
-    float mCurrentDelta = 0.0f;
-    float mPreviousDelta = 0.0f;
-
     bool mEnabled = true;
-    bool mClear = false;
 };
