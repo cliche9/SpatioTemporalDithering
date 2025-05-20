@@ -150,8 +150,6 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["gBayerNoise64Tex"] = mpBayer64Tex;
 
     var["PerFrame"]["gFrameCount"] = mFrameCount++;
-    var["PerFrame"]["gSampleCount"] = mpSamplePattern->getSampleCount();
-    var["PerFrame"]["gSampleIndex"] = mFrameCount % std::max(1u, mpSamplePattern->getSampleCount());//mpSamplePattern->getCurSample();
     var["PerFrame"]["gDLSSCorrectionStrength"] = mDLSSCorrectionStrength;
     var["PerFrame"]["gMinVisibility"] = mMinVisibility;
     var["PerFrame"]["gAlignMotionVectors"] = mAlignMotionVectors ? 1 : 0;

@@ -36,12 +36,9 @@ float getObjectHash()
 cbuffer PerFrame
 {
     uint gFrameCount;       // Frame count since scene was loaded.
-    uint gSampleCount;      // Sample count per pixel.
-    uint gSampleIndex;      // looped jitter sequence sample index
     float gDLSSCorrectionStrength;
 
     float gMinVisibility; // everything below (and including) this transparency will be resolved via russian roulette or dither
-    //int maxHits;
     int gAlignMotionVectors; // align motion vectors to grid spacing when moving
 }
 
@@ -61,7 +58,7 @@ struct RayData
     float4 color;
     float rayT; // input: TMax, output: TCurrent
 #endif
-    float minAlphaT; // RayT value of closest alpha-blended hit
+    float minAlphaT; // RayT value of closest alpha-blended hit (For TAA mask, not required for DLSS)
 };
 
 // posV: view space position (negative z)

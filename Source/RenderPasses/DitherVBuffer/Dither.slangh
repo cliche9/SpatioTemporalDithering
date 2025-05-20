@@ -112,7 +112,6 @@ uint3x3 get3x3Permutation(uint id)
 }
 
 uint4 get2x2Permutation(uint i) {
-    // only pretty configurations (first two numbers form a diagonal)
     switch (i % 24u) {
         case 0:  return uint4(0, 1, 2, 3);
         case 1:  return uint4(0, 1, 3, 2);
@@ -213,17 +212,8 @@ bool winHashGrid2D(DitherInfo d)
     return d.alpha >= threshold;
 }
 
-//bool winHashGrid(DitherInfo d)
-//{
-//    float threshold = evalHashGrid3D(d, gGridScale);
-//    
-//    return d.alpha >= threshold;
-//}
-
 bool winRoulette(DitherInfo d)
 {
-    // quantize posW
-    //posW = floor(posW * 1000.0) / 1000.0;
     float rng = hash4D(float4(d.posW, d.frameIndex));
     if(rng > d.alpha) return false;
     return true;
@@ -244,7 +234,6 @@ float getPixelDitherThreshold2x2(DitherInfo d)
 {
     // use random offset to ensure that each primitive uses a different mask
     uint randomOffset = uint(getObjectHash() * 7919);
-    //if (objectOffset <= 4) randomOffset = objectOffset;
 
     uint4 mask = get2x2Permutation(randomOffset); // mask with [0, 1, 2, 3] permutation
     uint2 p = d.pixel;
@@ -425,10 +414,7 @@ float ditherTemporalAAThreshold(DitherInfo d)
     }
 
     // random noise to break up the 5 steps
-    //float blue = gBlueNoise64x64Tex[pixel % 64u];
     float blue = getTopNoise(d); // generalized with more noise types beside static blue
-    // blue can be set to zero by the user in UE4 (prevents usage of blue noise)
-
     //float t = (stratifyIndex + blue + rng) / 6.0; // original threshold, but biased
     float t = (stratifyIndex + blue) / 5.0; // unbiased threshold
     
@@ -437,7 +423,7 @@ float ditherTemporalAAThreshold(DitherInfo d)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
-////////////////// DEPRECTED METHODS ////////////////////////////////////////////////////////
+////////////////// DEPRECATED METHODS ///////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 // WARNING: NOT UP TO DATE (Missing good matrix permutations)
@@ -480,23 +466,15 @@ bool winBlueNoise3D(DitherInfo d)
 
 bool winRotation(DitherInfo d)
 {
-    // quantize alpha?
-    //alpha = floor(alpha * 16.0) / 16.0;
-
     float rng = 0.0;
-    //rng += hash(float2(pixel));
-    //frameIndex = frameIndex % 2048;
-    //rng += float((pixel.x % 4u) + 4u * (pixel.y % 4u)) / 16.0;
     rng += ditherMatrix[d.pixel.x % 4u][d.pixel.y % 4u] / 16.0;
     rng += hash(float2(InstanceID(), GeometryIndex()));
-    //rng = hash4D(float4(pixel.x, pixel.y, InstanceID(), GeometryIndex()));
 
     return frac(rng + d.frameIndex * d.alpha) < d.alpha;
 }
 
 float noise(float2 uv)
 {
-    //return pow(gNoiseTex.SampleLevel(gNoiseSampler, uv * gNoiseScale, 0.0).r, 2.2);
     return gNoiseTex.SampleLevel(gNoiseSampler, uv * gNoiseScale, 0.0).r;
 }
 
