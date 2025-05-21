@@ -124,9 +124,9 @@ RenderPassReflection SVAO::reflect(const CompileData& compileData)
     reflector.addInput(kGbufferDepth, "Non-Linear Depth from the G-Buffer").bindFlags(ResourceBindFlags::ShaderResource);
     reflector.addInput(kDepth, "Linear Depth-buffer").bindFlags(ResourceBindFlags::ShaderResource)
         .texture2D(0, 0, 1, 0, 1); // allow mipmaps
-    reflector.addInput(kDepth2, "Linear Depth-buffer of second layer").bindFlags(ResourceBindFlags::ShaderResource);
+    reflector.addInput(kDepth2, "Linear Depth-buffer of second layer").bindFlags(ResourceBindFlags::ShaderResource).flags(RenderPassReflection::Field::Flags::Optional);
     reflector.addInput(kNormals, "World space normals, [0, 1] range").bindFlags(ResourceBindFlags::ShaderResource);
-    reflector.addInput(kColor, "Color for pixel importance").bindFlags(ResourceBindFlags::ShaderResource);
+    reflector.addInput(kColor, "Color for pixel importance").bindFlags(ResourceBindFlags::ShaderResource).flags(RenderPassReflection::Field::Flags::Optional);
     auto aoFormat = ResourceFormat::R8Unorm;
     if(mDualAo) aoFormat = ResourceFormat::RG8Unorm;
     reflector.addOutput(kAmbientMap, "Ambient Occlusion (bright/dark if dualAO is enabled)").bindFlags(ResourceBindFlags::AllColorViews).format(aoFormat);
@@ -215,8 +215,13 @@ void SVAO::execute(RenderContext* pRenderContext, const RenderData& renderData)
     auto pDepth = renderData[kDepth]->asTexture();
     auto pNormal = renderData[kNormals]->asTexture();
     auto pAoDst = renderData[kAmbientMap]->asTexture();
-    auto pDepth2 = renderData[kDepth2]->asTexture();
-    auto pColor = renderData[kColor]->asTexture();
+    auto pDepth2 = renderData.getTexture(kDepth2);
+    auto pColor = renderData.getTexture(kColor);
+
+    if (!pDepth2 && mPrimaryDepthMode == DepthMode::DualDepth)
+    {
+        mPrimaryDepthMode = DepthMode::SingleDepth;
+    }
 
     auto pAoMask = renderData[kAoStencil]->asTexture();
 
