@@ -30,7 +30,7 @@
 #include "RenderGraph/RenderPass.h"
 #include "Utils/SampleGenerators/HaltonSamplePattern.h"
 #include "Utils/SampleGenerators/StratifiedSamplePattern.h"
-
+#include "TransparencyWhitelist.h"
 
 
 using namespace Falcor;
@@ -263,7 +263,7 @@ private:
     DitherMode mDitherMode = DitherMode::PerPixel3x3;
     bool mUseAlphaTextureLOD = false; // use lod for alpha lookups
     bool mUseTransparencyWhitelist = false;
-    std::set<std::string> mTransparencyWhitelist;
+    whitelist_t mTransparencyWhitelist;
     CoverageCorrection mCoverageCorrection = CoverageCorrection::DLSS;
     float mDLSSCorrectionStrength = 1.0;
     DitherPattern mFractalDitherPattern = DitherPattern::Dither8x8;

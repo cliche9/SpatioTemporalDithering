@@ -42,6 +42,10 @@ namespace
 
     const std::string kRayShader = "RenderPasses/RTAO/Ray.rt.slang";
     const uint32_t kMaxPayloadSize = 4;
+
+    const std::string kWhitelist = "whitelist";
+    const std::string kWhitelistBuffer = "whitelistBuffer"; // GPU Buffer for whitelist
+
 }
 
 extern "C" FALCOR_API_EXPORT void registerPlugin(Falcor::PluginRegistry& registry)
@@ -136,6 +140,11 @@ void RTAO::execute(RenderContext* pRenderContext, const RenderData& renderData)
     vars["gWPosTex"] = pWPos;
     vars["gFaceNormalTex"] = pFaceNormal;
     vars["ambientOut"] = pAmbient;
+
+    // whitelist
+    bool useWhitelist = renderData.getDictionary().keyExists(kWhitelistBuffer);
+    mRayProgram->addDefine("TRANSPARENCY_WHITELIST", useWhitelist ? "1" : "0");
+    vars["gTransparencyWhitelist"] = renderData.getDictionary().getValue<ref<Buffer>>(kWhitelistBuffer, nullptr);
 
     mpScene->raytrace(pRenderContext, mRayProgram.get(), mRayVars, uint3(pAmbient->getWidth(), pAmbient->getHeight(), 1));
 }

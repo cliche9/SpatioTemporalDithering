@@ -42,6 +42,7 @@ namespace
 
     const std::string kUseWhitelist = "useWhitelist";
     const std::string kWhitelist = "whitelist";
+    const std::string kWhitelistBuffer = "whitelistBuffer"; // GPU Buffer for whitelist
 }
 
 extern "C" FALCOR_API_EXPORT void registerPlugin(Falcor::PluginRegistry& registry)
@@ -191,6 +192,13 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     dispatch.x = pVbuffer->getWidth();
     dispatch.y = pVbuffer->getHeight();
     mpScene->raytrace(pRenderContext, mpProgram.get(), mpVars, dispatch);
+
+    // add whitelist to dict
+    if (mUseTransparencyWhitelist)
+    {
+        renderData.getDictionary()[kWhitelist] = mTransparencyWhitelist;
+        renderData.getDictionary()[kWhitelistBuffer] = mpTransparencyWhitelist;
+    }
 }
 
 void DitherVBuffer::renderUI(Gui::Widgets& widget)
@@ -360,34 +368,7 @@ void DitherVBuffer::setupProgram()
 
 bool DitherVBuffer::updateWhitelistBuffer()
 {
-    if (!mpScene) return true;
-    bool any = false;
-
-    // Calculate the number of uint32_t elements needed to store all bits
-    uint32_t materialCount = mpScene->getMaterialCount();
-    uint32_t uintCount = (materialCount + 31) / 32; // Round up to the nearest uint32_t
-
-    std::vector<uint32_t> whitelist(uintCount, 0); // Initialize all bits to 0
-
-    // Pack the boolean values into bits
-    for (uint32_t mat = 0; mat < materialCount; ++mat)
-    {
-        std::string name = mpScene->getMaterial(MaterialID(mat))->getName();
-        bool isTransparent = mTransparencyWhitelist.find(name) != mTransparencyWhitelist.end();
-        any |= isTransparent;
-
-        if (isTransparent)
-        {
-            // Set the corresponding bit in the whitelist
-            uint32_t uintIndex = mat / 32;
-            uint32_t bitIndex = mat % 32;
-            whitelist[uintIndex] |= (1 << bitIndex);
-        }
-    }
-
-    mpTransparencyWhitelist = Buffer::createStructured(mpDevice, sizeof(uint32_t), uintCount, ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, whitelist.data(), false);
-
-    return any;
+    return updateWhitelist(mpDevice, mpScene, mTransparencyWhitelist, mpTransparencyWhitelist);
 }
 
 void DitherVBuffer::createNoisePattern()
