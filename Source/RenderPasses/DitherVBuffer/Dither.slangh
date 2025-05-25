@@ -8,6 +8,7 @@
 #define DITHER_MODE_FRACTAL_DITHERING 7
 #define DITHER_MODE_BLUE_NOISE3D 8
 #define DITHER_MODE_DITHER_TEMPORAL_AA 10
+#define DITHER_MODE_STBN 11
 
 #define TEMPORAL_DITHER_DISABLED 0
 #define TEMPORAL_DITHER_UNIFORM 1
@@ -54,6 +55,7 @@ SamplerState gNoiseSampler;
 Texture2DArray<float> gBlueNoise3DTex;
 Texture2D<float> gBlueNoise64x64Tex;
 Texture2D<float> gBayerNoise64Tex;
+Texture2DArray<float> gSpatioTemporalBlueNoiseTex;
 
 StructuredBuffer<uint> gPermutations3x3; // permutations packed into 4 bytes
 
@@ -441,6 +443,20 @@ float getPixelDitherThreshold4x4(DitherInfo d)
     p = p % 4u;
 
     return (ditherMatrix[p.y][p.x] + getTopNoise(d)) / 16.0;
+}
+
+float getSTBNThreshold(DitherInfo d)
+{
+    uint randomOffset = uint(getObjectHash() * 128 * 128 * 64); // texture resolution 128x128x64
+    uint3 texCoord = uint3(d.pixel, d.frameIndex);
+    // add random offset
+    texCoord.x += randomOffset % 128u;
+    texCoord.y += (randomOffset / 128u) % 128u;
+    texCoord.z += randomOffset / 16384u;
+    // clamp to texture size
+    texCoord = texCoord % uint3(128, 128, 64);
+    float t = gSpatioTemporalBlueNoiseTex[texCoord];
+    return clamp(t, 1e-6, 1.0);
 }
 
 float getBlueNoise3DThreshold(DitherInfo d)

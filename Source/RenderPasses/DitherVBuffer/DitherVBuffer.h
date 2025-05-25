@@ -55,6 +55,7 @@ public:
         BlueNoise3D,
         PerPixel2x2x2,
         DitherTemporalAA,
+        SpatioTemporalBlueNoise, // Spatiotemporal Blue Noise Masks, Wolfe 2022
         Disabled = 0xff,
     };
 
@@ -72,6 +73,7 @@ public:
         { DitherMode::PerPixel2x2, "STD 2x2" },
         // the implementation of those work, but they have bad results:
         { DitherMode::Periodic, "Periodic" },
+        { DitherMode::SpatioTemporalBlueNoise, "SpatioTemporalBlueNoise" },
         { DitherMode::BlueNoise3D, "BlueNoise3D" },
         
     });
@@ -205,6 +207,17 @@ public:
 
     FALCOR_PLUGIN_CLASS(DitherVBuffer, "DitherVBuffer", "VBuffer with Dithering options for transparency");
 
+    enum class STBNNoise : uint32_t
+    {
+        Scalar,
+        Vector1D,
+    };
+
+    FALCOR_ENUM_INFO(STBNNoise, {
+        {STBNNoise::Scalar, "Scalar (Default)"},
+        {STBNNoise::Vector1D, "Vector1D"},
+    });
+
     static ref<DitherVBuffer> create(ref<Device> pDevice, const Properties& props) { return make_ref<DitherVBuffer>(pDevice, props); }
 
     DitherVBuffer(ref<Device> pDevice, const Properties& props);
@@ -278,8 +291,11 @@ private:
     ref<Texture> mpBlueNoise3DTex;
     ref<Texture> mpBlueNoise64Tex;
     ref<Texture> mpBayer64Tex;
+    ref<Texture> mpSpatioTemporalBlueNoiseTex;
+    ref<Texture> mpSpatioTemporalBlueNoiseTex2;
     NoisePattern mNoisePattern = NoisePattern::Blue;
     NoiseTopPattern mNoiseTopPattern = NoiseTopPattern::StaticBlue;
+    STBNNoise mSTBNNoise = STBNNoise::Scalar;
     bool mCullBackFaces = false;
     float mMinVisibility = 1.0f;
     bool mAlignMotionVectors = false; // align when using pixel grid techniques
@@ -296,3 +312,4 @@ FALCOR_ENUM_REGISTER(DitherVBuffer::NoisePattern);
 FALCOR_ENUM_REGISTER(DitherVBuffer::ObjectHashType);
 FALCOR_ENUM_REGISTER(DitherVBuffer::NoiseTopPattern);
 FALCOR_ENUM_REGISTER(DitherVBuffer::RenderScale);
+FALCOR_ENUM_REGISTER(DitherVBuffer::STBNNoise);

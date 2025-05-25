@@ -71,6 +71,8 @@ DitherVBuffer::DitherVBuffer(ref<Device> pDevice, const Properties& props)
     mpBlueNoise3DTex = Texture::createFromFile(mpDevice, "dither/bluenoise3d_16.dds", false, false);
     mpBlueNoise64Tex = Texture::createFromFile(mpDevice, "dither/bluenoise64.dds", false, false);
     mpBayer64Tex = Texture::createFromFile(mpDevice, "dither/bayer64.dds", false, false);
+    mpSpatioTemporalBlueNoiseTex = Texture::createFromFile(mpDevice, "dither/spatiotemporal_bluenoise.dds", false, false);
+    mpSpatioTemporalBlueNoiseTex2 = Texture::createFromFile(mpDevice, "dither/spatiotemporal_bluenoise2.dds", false, false);
 
     // load properties
     for (const auto& [key, value] : props)
@@ -149,6 +151,7 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["gBlueNoise3DTex"] = mpBlueNoise3DTex;
     var["gBlueNoise64x64Tex"] = mpBlueNoise64Tex;
     var["gBayerNoise64Tex"] = mpBayer64Tex;
+    var["gSpatioTemporalBlueNoiseTex"] = mSTBNNoise == STBNNoise::Scalar ? mpSpatioTemporalBlueNoiseTex : mpSpatioTemporalBlueNoiseTex2;
 
     var["PerFrame"]["gFrameCount"] = mFrameCount++;
     var["PerFrame"]["gDLSSCorrectionStrength"] = mDLSSCorrectionStrength;
@@ -259,6 +262,12 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
     {
         widget.checkbox("Enable DTAA*", mDitherTAAPermutations);
         widget.tooltip("Uses a permutations of the [0,1,2,3,4] sequence for creating the 5x5 mask. This will prevent objects from masking each other.");
+    }
+
+    if (mDitherMode == DitherMode::SpatioTemporalBlueNoise)
+    {
+        widget.dropdown("STBN Variant", mSTBNNoise);
+        widget.tooltip("Scalar is based on Void and Cluster algorithm. Vector is based on Georgiev et al.");
     }
 
     widget.dropdown("Correction", mCoverageCorrection);
