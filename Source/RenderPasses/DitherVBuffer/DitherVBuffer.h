@@ -303,6 +303,10 @@ private:
     bool mDitherTAAPermutations = true;
 
     RenderScale mRenderScale = RenderScale::Full;
+
+    std::vector<int> mPermutations3x3Scores;
+    std::vector<Gui::DropdownValue> mPermutations3x3Dropdown;
+    uint32_t mPermutations3x3Score = 0; 
 };
 
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherMode);

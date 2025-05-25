@@ -17,9 +17,9 @@ inline double torusDistanceL2(int x1, int y1, int x2, int y2) {
 }
 
 template<int T>
-inline double scorePermutation(const std::array<int, T* T>& indices) {
+inline int scorePermutation(const std::array<int, T* T>& indices) {
     // 2D Distance Score
-    double sumInverseDist = 0.0;
+    int sumInverseDist = 0.0;
     /*for (size_t i = 0; i < T * T; ++i) {
         for (size_t j = i + 1; j < T * T; ++j) {
             int x1 = i % T, y1 = i / T;
@@ -59,10 +59,10 @@ inline std::vector<std::array<int, T* T>> generateBestPermutations(size_t maxRes
     std::array<int, T * T> indices;
     std::iota(indices.begin(), indices.end(), 0);
 
-    std::vector<std::pair<double, std::array<int, T* T>>> scoredPermutations;
+    std::vector<std::pair<int, std::array<int, T* T>>> scoredPermutations;
 
     do {
-        double score = scorePermutation<T>(indices);
+        int score = scorePermutation<T>(indices);
         scoredPermutations.push_back({ score, indices });
     } while (std::next_permutation(indices.begin(), indices.end()));
 
@@ -126,7 +126,7 @@ inline std::vector<std::array<int, T* T>> generateBestPermutations(size_t maxRes
     std::cout << "Total: " << count << "\n\n";
     */
     // Return only the best results
-    std::vector<std::array<int, T* T>> bestPermutations;
+    std::vector<std::array<int, T * T>> bestPermutations;
     for (size_t i = 0; i < std::min(maxResults, scoredPermutations.size()); ++i) {
         if(scoredPermutations[i].first == 0.0) break; // stop when score falls to zero
         bestPermutations.push_back(scoredPermutations[i].second);
@@ -190,4 +190,44 @@ inline ref<Buffer> generatePermutations3x3(ref<Device> pDevice)
     std::transform(perms.begin(), perms.end(), packed.begin(), packPermutation);
 
     return Buffer::createStructured(pDevice, sizeof(packed[0]), packed.size(), ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, packed.data(), false);
+}
+
+inline ref<Buffer> generatePermutations3x3(ref<Device> pDevice, int minScore, int maxScore)
+{
+    std::array<int, 3 * 3> indices;
+    std::iota(indices.begin(), indices.end(), 0);
+
+    std::vector<std::array<int, 3 * 3>> perms;
+
+    do {
+        int score = scorePermutation<3>(indices);
+        if (score >= minScore && score <= maxScore)
+            perms.push_back(indices);
+    } while (std::next_permutation(indices.begin(), indices.end()));
+
+    std::cout << "Permutations with score between " << minScore << " and " << maxScore << ": " << perms.size() << "\n";
+
+    std::vector<uint32_t> packed(perms.size());
+    std::transform(perms.begin(), perms.end(), packed.begin(), packPermutation);
+
+    return Buffer::createStructured(pDevice, sizeof(packed[0]), packed.size(), ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, packed.data(), false);
+}
+
+template<int T = 3>
+inline std::vector<int> getPermutationScores()
+{
+    std::array<int, T * T> indices;
+    std::iota(indices.begin(), indices.end(), 0);
+
+    std::vector<int> scores;
+
+    do {
+        int score = scorePermutation<T>(indices);
+        scores.push_back(score);
+    } while (std::next_permutation(indices.begin(), indices.end()));
+
+    // reduce to unique, sorted scores
+    std::sort(scores.begin(), scores.end(), std::greater<>());
+    scores.erase(std::unique(scores.begin(), scores.end()), scores.end());
+    return scores;
 }

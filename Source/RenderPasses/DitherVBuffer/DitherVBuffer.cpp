@@ -67,6 +67,13 @@ DitherVBuffer::DitherVBuffer(ref<Device> pDevice, const Properties& props)
 
     //generatePermutations<3>();
     mpPermutations3x3Buffer = generatePermutations3x3(mpDevice);
+    mPermutations3x3Scores = getPermutationScores();
+    mPermutations3x3Score = mPermutations3x3Scores.empty() ? 0 : mPermutations3x3Scores[0];
+    mPermutations3x3Dropdown.clear();
+    for (const auto& score : mPermutations3x3Scores)
+    {
+        mPermutations3x3Dropdown.push_back(Gui::DropdownValue{ (uint)score, std::to_string(score) });
+    }
 
     mpBlueNoise3DTex = Texture::createFromFile(mpDevice, "dither/bluenoise3d_16.dds", false, false);
     mpBlueNoise64Tex = Texture::createFromFile(mpDevice, "dither/bluenoise64.dds", false, false);
@@ -268,6 +275,14 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
     {
         widget.dropdown("STBN Variant", mSTBNNoise);
         widget.tooltip("Scalar is based on Void and Cluster algorithm. Vector is based on Georgiev et al.");
+    }
+
+    if (auto g = widget.group("Permutations"))
+    {
+        if(g.dropdown("Score: ", mPermutations3x3Dropdown, mPermutations3x3Score))
+        {
+            mpPermutations3x3Buffer = generatePermutations3x3(mpDevice, mPermutations3x3Score, mPermutations3x3Score);
+        }
     }
 
     widget.dropdown("Correction", mCoverageCorrection);
