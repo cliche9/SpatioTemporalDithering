@@ -9,6 +9,7 @@
 #define DITHER_MODE_BLUE_NOISE3D 8
 #define DITHER_MODE_DITHER_TEMPORAL_AA 10
 #define DITHER_MODE_STBN 11
+#define DITHER_MODE_SURFACE_STBN 12
 
 #define TEMPORAL_DITHER_DISABLED 0
 #define TEMPORAL_DITHER_UNIFORM 1
@@ -457,6 +458,58 @@ float getSTBNThreshold(DitherInfo d)
     texCoord = texCoord % uint3(128, 128, 64);
     float t = gSpatioTemporalBlueNoiseTex[texCoord];
     return clamp(t, 1e-6, 1.0);
+}
+
+float getHashSTBNThreshold(DitherInfo d)
+{
+    #if ENABLE_HASH_GRIDS != 0
+    uint randomOffset = uint(getObjectHash() * 64); // only for temporal slice
+
+    const float g_HashScale = gGridScale;
+    float pixScale = 1.0 / (g_HashScale * d.maxDerivUV);
+    
+    // Find two nearest log-discretized noise scales
+    float2 pixScales = float2(
+        exp2(floor(log2(pixScale))),
+        exp2(ceil(log2(pixScale)))
+    );
+
+    uint4 coords = uint4(floor(pixScales.x * d.posUV), floor(pixScales.y * d.posUV));
+    //coords = uint4(((int4(coords) % 128) + 128) % 128);
+    coords = coords % 128u; // spatial part
+    
+    uint z = (d.frameIndex + randomOffset / (128u * 128u)) % 64u; // temporal part
+
+    // Compute alpha thresholds at our two noise scales
+    float2 alpha = float2(
+        gSpatioTemporalBlueNoiseTex[uint3(coords.xy, z)],
+        gSpatioTemporalBlueNoiseTex[uint3(coords.zw, z)]
+    );
+    alpha = 1.0 - alpha;
+
+    // Factor to interpolate lerp with
+    float lerpFactor = frac(log2(pixScale));
+    lerpFactor = 1.0;
+    //float lerpFactor = frac( pixScale );
+    
+    // Interpolate alpha threshold from noise at two scales
+    float x = (1.0 - lerpFactor) * alpha.x + lerpFactor * alpha.y;
+    
+    // Pass into CDF to compute uniformly distrib threshold
+    float a = min(lerpFactor, 1.0 - lerpFactor);
+    float3 cases = float3(
+        x * x / (2 * a * (1.0 - a)),
+        (x - 0.5 * a) / (1.0 - a),
+        1.0 - ((1.0 - x) * (1.0 - x) / (2.0 * a * (1.0 - a)))
+    );
+
+    float threshold = (x < (1 - a)) ? ((x < a) ? cases.x : cases.y) : cases.z;
+
+    threshold = clamp(threshold, 1e-6, 1.0);
+    return threshold;
+    #else
+    return 0.5;
+    #endif
 }
 
 float getBlueNoise3DThreshold(DitherInfo d)

@@ -253,7 +253,7 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
         widget.tooltip("Rotates the per-pixel dither pattern based on the frame index");
     }
 
-    if (mDitherMode == DitherMode::FractalDithering || mDitherMode == DitherMode::HashGrid || useTopNoiseGrid)
+    if (mDitherMode == DitherMode::FractalDithering || mDitherMode == DitherMode::HashGrid || useTopNoiseGrid || mDitherMode == DitherMode::SurfaceSpatioTemporalBlueNoise)
     {
         widget.var("Grid Scale", mGridScale, 0.0001f, 16.0f, 0.01f);
     }
@@ -271,7 +271,7 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
         widget.tooltip("Uses a permutations of the [0,1,2,3,4] sequence for creating the 5x5 mask. This will prevent objects from masking each other.");
     }
 
-    if (mDitherMode == DitherMode::SpatioTemporalBlueNoise)
+    if (mDitherMode == DitherMode::SpatioTemporalBlueNoise || mDitherMode == DitherMode::SurfaceSpatioTemporalBlueNoise)
     {
         widget.dropdown("STBN Variant", mSTBNNoise);
         widget.tooltip("Scalar is based on Void and Cluster algorithm. Vector is based on Georgiev et al.");

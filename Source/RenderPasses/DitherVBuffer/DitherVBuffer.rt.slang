@@ -280,6 +280,10 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     if(alpha < getSTBNThreshold(d))
         IgnoreHit();
     #endif
+    #if DITHER_MODE == DITHER_MODE_SURFACE_STBN
+    if (alpha < getHashSTBNThreshold(d))
+        IgnoreHit();
+    #endif
 
     #endif // FULL_BASELINE
 }

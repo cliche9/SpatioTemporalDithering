@@ -42,6 +42,7 @@ def render_graph_Dither():
     g.add_edge('DitherVBuffer.color', 'FSR.color')
     g.add_edge('DitherVBuffer.color', 'DitherTAA.colorIn')
     g.add_edge('DitherVBuffer.color', 'RayReconstructionPass.color')
+    g.add_edge('DitherVBuffer.opacity', 'FSR.reactive')
     g.mark_output('ToneMapper.dst')
     return g
 

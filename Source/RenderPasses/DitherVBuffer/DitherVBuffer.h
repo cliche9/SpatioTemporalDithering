@@ -56,6 +56,7 @@ public:
         PerPixel2x2x2,
         DitherTemporalAA,
         SpatioTemporalBlueNoise, // Spatiotemporal Blue Noise Masks, Wolfe 2022
+        SurfaceSpatioTemporalBlueNoise, // STBN attahed to surface (with HashGrid technique)
         Disabled = 0xff,
     };
 
@@ -74,6 +75,7 @@ public:
         // the implementation of those work, but they have bad results:
         { DitherMode::Periodic, "Periodic" },
         { DitherMode::SpatioTemporalBlueNoise, "SpatioTemporalBlueNoise" },
+        { DitherMode::SurfaceSpatioTemporalBlueNoise, "SurfaceSpatioTemporalBlueNoise" },
         { DitherMode::BlueNoise3D, "BlueNoise3D" },
         
     });
