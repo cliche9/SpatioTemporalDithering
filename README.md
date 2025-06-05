@@ -9,6 +9,7 @@ Teaser:
 ## Contents:
 
 * [Demo User Interface](#demo-user-interface)
+* [Source Code](#source-code)
 * [Falcor Prerequisites](#falcor-prerequisites)
 * [Building Falcor](#building-falcor)
 
@@ -39,6 +40,16 @@ You can navigate the camera with WASD and dragging the mouse for rotation.
 Hold shift for more camera speed
 QE for camera up and down
 Space to pause the animation
+
+## Source Code
+
+The important files can be found in `Source/RenderPasses/DitherVBuffer/`:
+* `DitherVBuffer.cpp/.h`: Renderer
+* `Dither.slangh`: Shader code for STD, RussianRoulette etc.
+* `DitherVBuffer.rt.slang`: Ray tracing shader (uses functions fron the `Dither.slangh` in the any-hit)
+* `PermutationLookup.h`: Code for generating our 3x3 Dither Matrices
+
+Additionally you can check out `Source/RenderPasses/DitherVBufferRaster/` for the raster implementation.
 
 ## Falcor Prerequisites
 - Windows 10 version 20H2 (October 2020 Update) or newer, OS build revision .789 or newer
