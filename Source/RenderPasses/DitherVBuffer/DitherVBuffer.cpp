@@ -36,6 +36,7 @@ namespace
     const std::string kMotion = "mvec";
     const std::string kOpacity = "opacity";
     const std::string kColorOut = "color";
+    const std::string kDebugViz = "debugViz";
 
     const uint32_t kMaxPayloadSizeBytes = 6 * sizeof(float); // could be optimized to 2*float for FULL_STOCHASTIC, but not measurable in performance
     const std::string kProgramRaytraceFile = "RenderPasses/DitherVBuffer/DitherVBuffer.rt.slang";
@@ -65,8 +66,10 @@ DitherVBuffer::DitherVBuffer(ref<Device> pDevice, const Properties& props)
     sd.setAddressingMode(Sampler::AddressMode::Wrap, Sampler::AddressMode::Wrap, Sampler::AddressMode::Wrap);
     mpNoiseSampler = Sampler::create(mpDevice, sd);
 
-    //generatePermutations<3>();
+    // Generate permutation buffers for 2x2, 3x3, and 4x4 dither matrices
+    mpPermutations2x2Buffer = generatePermutations2x2(mpDevice);
     mpPermutations3x3Buffer = generatePermutations3x3(mpDevice);
+    mpPermutations4x4Buffer = generatePermutations4x4(mpDevice);
     mPermutations3x3Scores = getPermutationScores();
     mPermutations3x3Score = mPermutations3x3Scores.empty() ? 0 : mPermutations3x3Scores[0];
     mPermutations3x3Dropdown.clear();
@@ -120,6 +123,8 @@ RenderPassReflection DitherVBuffer::reflect(const CompileData& compileData)
     reflector.addOutput(kMotion, "Motion vector").format(ResourceFormat::RG32Float).flags(RenderPassReflection::Field::Flags::Optional).texture2D(dims.x, dims.y);
     reflector.addOutput(kOpacity, "Opacity Mask (1 = any transparent)").format(ResourceFormat::R8Unorm).flags(RenderPassReflection::Field::Flags::Optional).texture2D(dims.x, dims.y);
     reflector.addOutput(kColorOut, "Final color").format(ResourceFormat::RGBA32Float).bindFlags(ResourceBindFlags::AllColorViews).texture2D(dims.x, dims.y);
+    // ADTF Debug Visualization output (optional)
+    reflector.addOutput(kDebugViz, "ADTF Debug Visualization").format(ResourceFormat::RGBA32Float).flags(RenderPassReflection::Field::Flags::Optional).texture2D(dims.x, dims.y);
     return reflector;
 }
 
@@ -129,10 +134,12 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     auto pMotion = renderData.getTexture(kMotion);
     auto pOpacity = renderData.getTexture(kOpacity);
     auto pColor = renderData.getTexture(kColorOut);
+    auto pDebugViz = renderData.getTexture(kDebugViz);
 
     if (!mpScene)
     {
         pRenderContext->clearTexture(pColor.get(), float4(0, 0, 0, 0));
+        if (pDebugViz) pRenderContext->clearTexture(pDebugViz.get(), float4(0, 0, 0, 0));
         return;
     }
 
@@ -154,7 +161,9 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["gNoiseSampler"] = mpNoiseSampler;
     assert(mpTransparencyWhitelist);
     var["gTransparencyWhitelist"] = mpTransparencyWhitelist;
+    var["gPermutations2x2"] = mpPermutations2x2Buffer;
     var["gPermutations3x3"] = mpPermutations3x3Buffer;
+    var["gPermutations4x4"] = mpPermutations4x4Buffer;
     var["gBlueNoise3DTex"] = mpBlueNoise3DTex;
     var["gBlueNoise64x64Tex"] = mpBlueNoise64Tex;
     var["gBayerNoise64Tex"] = mpBayer64Tex;
@@ -172,6 +181,15 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["DitherConstants"]["gNoiseTop"] = uint(mNoiseTopPattern);
     var["DitherConstants"]["gDitherTAAPermutations"] = mDitherTAAPermutations ? 1 : 0;
 
+    // ADTF (Adaptive Dithering Transparency Framework) parameters
+    var["AdaptiveDitherParams"]["gAdaptiveDepthFar"] = mAdaptiveDepthFar;
+    var["AdaptiveDitherParams"]["gAdaptiveDepthWeight"] = mAdaptiveDepthWeight;
+    var["AdaptiveDitherParams"]["gAdaptiveFreqWeight"] = mAdaptiveFreqWeight;
+    var["AdaptiveDitherParams"]["gAdaptiveAlphaWeight"] = mAdaptiveAlphaWeight;
+    var["AdaptiveDitherParams"]["gAdaptiveFreqScale"] = mAdaptiveFreqScale;
+    var["AdaptiveDitherParams"]["gAdaptiveNoiseBlend"] = mAdaptiveNoiseBlend;
+    var["AdaptiveDitherParams"]["gDebugVizMode"] = uint(mDebugVizMode);
+
     LightSettings::get().updateShaderVar(var);
     ShadowSettings::get().updateShaderVar(mpDevice, var);
 
@@ -181,6 +199,22 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     mpProgram->addDefine("ALPHA_TEXTURE_LOD", mUseAlphaTextureLOD ? "1" : "0");
     mpProgram->addDefine("CULL_BACK_FACES", mCullBackFaces ? "1" : "0");
     mpProgram->addDefines(ShadowSettings::get().getShaderDefines(*mpScene, renderData.getDefaultTextureDims()));
+
+    // ADTF Debug Visualization define and binding
+    bool isAdaptiveMode = mDitherMode == DitherMode::Adaptive;
+    bool enableDebugViz = isAdaptiveMode && mDebugVizMode != DebugVizMode::Disabled && pDebugViz;
+    
+    if (enableDebugViz)
+    {
+        mpProgram->addDefine("DEBUG_VIZ_MODE", std::to_string(uint32_t(mDebugVizMode)));
+    }
+    else
+    {
+        mpProgram->addDefine("DEBUG_VIZ_MODE", "0"); // DEBUG_VIZ_DISABLED
+    }
+    
+    // Always bind gDebugViz (shader expects it), use pDebugViz or a dummy texture
+    var["gDebugViz"] = pDebugViz ? pDebugViz : pColor; // fallback to color output if not available
 
     if(mMinVisibility >= 1.0f)
     {
@@ -275,6 +309,34 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
     {
         widget.dropdown("STBN Variant", mSTBNNoise);
         widget.tooltip("Scalar is based on Void and Cluster algorithm. Vector is based on Georgiev et al.");
+    }
+
+    // ADTF (Adaptive Dithering Transparency Framework) controls
+    if (mDitherMode == DitherMode::Adaptive)
+    {
+        if (auto g = widget.group("ADTF Settings"))
+        {
+            g.slider("Depth Far Plane", mAdaptiveDepthFar, 10.0f, 1000.0f);
+            g.tooltip("Far plane distance for depth normalization");
+
+            g.slider("Depth Weight", mAdaptiveDepthWeight, 0.0f, 2.0f);
+            g.tooltip("Weight of depth factor in matrix size selection");
+
+            g.slider("Frequency Weight", mAdaptiveFreqWeight, 0.0f, 2.0f);
+            g.tooltip("Weight of texture frequency factor in matrix size selection");
+
+            g.slider("Alpha Weight", mAdaptiveAlphaWeight, 0.0f, 2.0f);
+            g.tooltip("Weight of alpha factor in matrix size selection");
+
+            g.slider("Frequency Scale", mAdaptiveFreqScale, 0.1f, 10.0f);
+            g.tooltip("Scale factor for texture derivatives");
+
+            g.slider("Noise Blend", mAdaptiveNoiseBlend, 0.0f, 1.0f);
+            g.tooltip("Blend factor between structured dither and noise");
+
+            g.dropdown("Debug Visualization", mDebugVizMode);
+            g.tooltip("Select debug visualization mode for ADTF");
+        }
     }
 
     if (auto g = widget.group("Permutations"))

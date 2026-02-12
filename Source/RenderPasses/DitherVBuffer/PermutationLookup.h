@@ -1,6 +1,7 @@
 #pragma once
 #include "Falcor.h"
 #include <fstream>
+#include <random>
 
 template<int T>
 inline int torusDistance(int x1, int y1, int x2, int y2) {
@@ -135,6 +136,15 @@ inline std::vector<std::array<int, T* T>> generateBestPermutations(size_t maxRes
     return bestPermutations;
 }
 
+// Function to pack 4 values (0-3) into a single uint32_t using 4 bits per value
+inline uint32_t packPermutation2x2(const std::array<int, 4>& indices) {
+    uint32_t packed = 0;
+    for (size_t i = 0; i < 4; ++i) {
+        packed |= (indices[i] & 0xF) << (i * 4);
+    }
+    return packed;
+}
+
 // Function to pack 8 values (0-8) into a single uint32_t using 4 bits per value
 inline uint32_t packPermutation(const std::array<int, 9>& indices) {
     uint32_t packed = 0;
@@ -227,6 +237,169 @@ inline std::vector<int> getPermutationScores()
     } while (std::next_permutation(indices.begin(), indices.end()));
 
     // reduce to unique, sorted scores
+    std::sort(scores.begin(), scores.end(), std::greater<>());
+    scores.erase(std::unique(scores.begin(), scores.end()), scores.end());
+    return scores;
+}
+
+// ============================================================================
+// 2x2 Dither Matrix Generation
+// ============================================================================
+
+inline ref<Buffer> generatePermutations2x2(ref<Device> pDevice)
+{
+    // 2x2 has 4! = 24 permutations
+    // Note: For 2x2, the "no successive elements" constraint is impossible to satisfy
+    // because in a 2x2 torus, every cell is adjacent to every other cell.
+    // So we generate ALL permutations without filtering.
+    std::array<int, 4> indices;
+    std::iota(indices.begin(), indices.end(), 0);
+    
+    std::vector<std::array<int, 4>> allPerms;
+    do {
+        allPerms.push_back(indices);
+    } while (std::next_permutation(indices.begin(), indices.end()));
+    
+    std::cout << "2x2 Permutations (all): " << allPerms.size() << "\n";
+
+    std::vector<uint32_t> packed(allPerms.size());
+    std::transform(allPerms.begin(), allPerms.end(), packed.begin(), packPermutation2x2);
+
+    return Buffer::createStructured(pDevice, sizeof(packed[0]), packed.size(), ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, packed.data(), false);
+}
+
+// ============================================================================
+// 4x4 Dither Matrix Generation
+// ============================================================================
+
+// Structure to hold a 4x4 matrix packed into two uint32_t values
+// Each value (0-15) uses 4 bits, so we need 16*4 = 64 bits = 2 uint32_t
+struct Packed4x4Matrix {
+    uint32_t low;   // First 8 values
+    uint32_t high;  // Last 8 values
+};
+
+// Pack 16 values (0-15) into two uint32_t values
+inline Packed4x4Matrix packPermutation4x4(const std::array<int, 16>& indices) {
+    Packed4x4Matrix packed;
+    packed.low = 0;
+    packed.high = 0;
+    for (size_t i = 0; i < 8; ++i) {
+        packed.low |= (indices[i] & 0xF) << (i * 4);
+        packed.high |= (indices[i + 8] & 0xF) << (i * 4);
+    }
+    return packed;
+}
+
+// Generate 4x4 permutations using random sampling (16! is too large for exhaustive search)
+// Uses simulated annealing to find good permutations
+inline std::vector<std::array<int, 16>> generateBestPermutations4x4(size_t maxResults, size_t iterations = 1000000) {
+    std::vector<std::pair<int, std::array<int, 16>>> bestPerms;
+    
+    // Start with Bayer matrix as initial guess
+    std::array<int, 16> current = {
+        0, 8, 2, 10,
+        12, 4, 14, 6,
+        3, 11, 1, 9,
+        15, 7, 13, 5
+    };
+    
+    int currentScore = scorePermutation<4>(current);
+    
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 15);
+    std::uniform_real_distribution<> disReal(0.0, 1.0);
+    
+    double temperature = 100.0;
+    double coolingRate = 0.9999;
+    
+    for (size_t iter = 0; iter < iterations; ++iter) {
+        // Create neighbor by swapping two random positions
+        auto neighbor = current;
+        int i = dis(gen);
+        int j = dis(gen);
+        if (i != j) {
+            std::swap(neighbor[i], neighbor[j]);
+        }
+        
+        int neighborScore = scorePermutation<4>(neighbor);
+        
+        // Accept if better or with probability based on temperature
+        if (neighborScore > currentScore) {
+            current = neighbor;
+            currentScore = neighborScore;
+        } else if (neighborScore > 0 && disReal(gen) < std::exp((neighborScore - currentScore) / temperature)) {
+            current = neighbor;
+            currentScore = neighborScore;
+        }
+        
+        temperature *= coolingRate;
+        
+        // Store good permutations
+        if (currentScore > 0) {
+            bool found = false;
+            for (const auto& p : bestPerms) {
+                if (p.second == current) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                bestPerms.push_back({currentScore, current});
+            }
+        }
+    }
+    
+    // Sort by score (higher is better)
+    std::sort(bestPerms.begin(), bestPerms.end(),
+        [](const auto& a, const auto& b) { return a.first > b.first; });
+    
+    // Return top results
+    std::vector<std::array<int, 16>> result;
+    for (size_t i = 0; i < std::min(maxResults, bestPerms.size()); ++i) {
+        if (bestPerms[i].first == 0) break;
+        result.push_back(bestPerms[i].second);
+    }
+    
+    return result;
+}
+
+inline ref<Buffer> generatePermutations4x4(ref<Device> pDevice, size_t maxResults = 256, size_t iterations = 1000000)
+{
+    auto perms = generateBestPermutations4x4(maxResults, iterations);
+    std::cout << "4x4 Permutations found: " << perms.size() << "\n";
+    
+    if (perms.empty()) {
+        // Fallback: use Bayer matrix if no good permutations found
+        perms.push_back({
+            0, 8, 2, 10,
+            12, 4, 14, 6,
+            3, 11, 1, 9,
+            15, 7, 13, 5
+        });
+    }
+
+    std::vector<Packed4x4Matrix> packed(perms.size());
+    std::transform(perms.begin(), perms.end(), packed.begin(), packPermutation4x4);
+
+    return Buffer::createStructured(pDevice, sizeof(packed[0]), packed.size(), ResourceBindFlags::ShaderResource, Buffer::CpuAccess::None, packed.data(), false);
+}
+
+// Get permutation scores for 2x2 and 4x4
+template<>
+inline std::vector<int> getPermutationScores<2>()
+{
+    std::array<int, 4> indices;
+    std::iota(indices.begin(), indices.end(), 0);
+
+    std::vector<int> scores;
+
+    do {
+        int score = scorePermutation<2>(indices);
+        scores.push_back(score);
+    } while (std::next_permutation(indices.begin(), indices.end()));
+
     std::sort(scores.begin(), scores.end(), std::greater<>());
     scores.erase(std::unique(scores.begin(), scores.end()), scores.end());
     return scores;

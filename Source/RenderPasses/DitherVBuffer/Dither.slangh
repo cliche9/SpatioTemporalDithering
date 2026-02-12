@@ -10,6 +10,20 @@
 #define DITHER_MODE_DITHER_TEMPORAL_AA 10
 #define DITHER_MODE_STBN 11
 #define DITHER_MODE_SURFACE_STBN 12
+#define DITHER_MODE_ADAPTIVE 13  // ADTF: Adaptive Dithering Transparency Framework
+
+// Debug Visualization Modes
+#define DEBUG_VIZ_DISABLED 0
+#define DEBUG_VIZ_MATRIX_SIZE 1
+#define DEBUG_VIZ_DEPTH_FACTOR 2
+#define DEBUG_VIZ_FREQ_FACTOR 3
+#define DEBUG_VIZ_ALPHA_FACTOR 4
+#define DEBUG_VIZ_ADAPTIVE_SCORE 5
+
+// Default to disabled if not specified by C++
+#ifndef DEBUG_VIZ_MODE
+#define DEBUG_VIZ_MODE DEBUG_VIZ_DISABLED
+#endif
 
 #define TEMPORAL_DITHER_DISABLED 0
 #define TEMPORAL_DITHER_UNIFORM 1
@@ -58,7 +72,9 @@ Texture2D<float> gBlueNoise64x64Tex;
 Texture2D<float> gBayerNoise64Tex;
 Texture2DArray<float> gSpatioTemporalBlueNoiseTex;
 
-StructuredBuffer<uint> gPermutations3x3; // permutations packed into 4 bytes
+StructuredBuffer<uint> gPermutations2x2; // 2x2 permutations packed into 4 bytes (4 values, 4 bits each)
+StructuredBuffer<uint> gPermutations3x3; // 3x3 permutations packed into 4 bytes (8 values, 4 bits each, 9th computed)
+StructuredBuffer<uint2> gPermutations4x4; // 4x4 permutations packed into 8 bytes (16 values, 4 bits each)
 
 cbuffer DitherConstants
 {
@@ -68,6 +84,18 @@ cbuffer DitherConstants
     uint gObjectHashType;
     uint gNoiseTop;
     uint gDitherTAAPermutations; // enables permutations for dither taa
+};
+
+// ADTF (Adaptive Dithering Transparency Framework) parameters
+cbuffer AdaptiveDitherParams
+{
+    float gAdaptiveDepthFar;      // Far plane for depth normalization (default: 100.0)
+    float gAdaptiveDepthWeight;   // Depth influence weight (default: 0.4)
+    float gAdaptiveFreqWeight;    // Frequency influence weight (default: 0.3)
+    float gAdaptiveAlphaWeight;   // Alpha influence weight (default: 0.3)
+    float gAdaptiveFreqScale;     // Frequency sensitivity scale (default: 1.0)
+    float gAdaptiveNoiseBlend;    // Base noise blend factor (default: 0.1)
+    uint gDebugVizMode;           // Debug visualization mode (0=disabled)
 };
 
 // common variables used in the dithering functions
@@ -92,6 +120,20 @@ static const int4x4 ditherMatrix = int4x4(
 
 float getObjectHash();
 
+uint4 get2x2PermutationFromBuffer(uint id)
+{
+    uint elementCount, stride;
+    gPermutations2x2.GetDimensions(elementCount, stride);
+    uint packed = gPermutations2x2[id % elementCount];
+    
+    uint4 result;
+    [unroll] for (int i = 0; i < 4; i++)
+    {
+        result[i] = (packed >> (i * 4)) & 0xF;
+    }
+    return result;
+}
+
 uint3x3 get3x3Permutation(uint id)
 {
     uint elementCount, stride;
@@ -111,6 +153,30 @@ uint3x3 get3x3Permutation(uint id)
     // Compute the missing value using sum formula (0+1+2+3+4+5+6+7+8 = 36)
     m[2][2] = 36 - sumValues;
 
+    return m;
+}
+
+uint4x4 get4x4Permutation(uint id)
+{
+    uint elementCount, stride;
+    gPermutations4x4.GetDimensions(elementCount, stride);
+    uint2 packed = gPermutations4x4[id % elementCount];
+    uint4x4 m;
+    
+    // Extract first 8 values from packed.x
+    [unroll] for (int i = 0; i < 8; i++)
+    {
+        uint value = (packed.x >> (i * 4)) & 0xF;
+        m[i / 4][i % 4] = value;
+    }
+    
+    // Extract next 8 values from packed.y
+    [unroll] for (int i = 0; i < 8; i++)
+    {
+        uint value = (packed.y >> (i * 4)) & 0xF;
+        m[(i + 8) / 4][(i + 8) % 4] = value;
+    }
+    
     return m;
 }
 
@@ -238,7 +304,7 @@ float getPixelDitherThreshold2x2(DitherInfo d)
     // use random offset to ensure that each primitive uses a different mask
     uint randomOffset = uint(getObjectHash() * 7919);
 
-    uint4 mask = get2x2Permutation(randomOffset); // mask with [0, 1, 2, 3] permutation
+    uint4 mask = get2x2PermutationFromBuffer(randomOffset); // mask with [0, 1, 2, 3] permutation from buffer
     uint2 p = d.pixel;
     if (gRotatePattern)
         p = applyRotation(p, d.frameIndex, 2, 2); // rotate lookup based on frame index
@@ -262,6 +328,22 @@ float getPixelDitherThreshold3x3(DitherInfo d)
     uint v = mask[p.y][p.x]; // 0-8
 
     return (v + getTopNoise(d)) / 9.0;
+}
+
+float getPixelDitherThreshold4x4(DitherInfo d)
+{
+    // use random offset to ensure that each primitive uses a different mask
+    uint randomOffset = uint(getObjectHash() * 7919);
+    uint2 p = d.pixel;
+    if(gRotatePattern)
+        p = applyRotation(p, d.frameIndex, 4, 4);
+    
+    p = p % 4u;
+
+    uint4x4 mask = get4x4Permutation(randomOffset);
+    uint v = mask[p.y][p.x]; // 0-15
+
+    return (v + getTopNoise(d)) / 16.0;
 }
 
 
@@ -429,22 +511,7 @@ float ditherTemporalAAThreshold(DitherInfo d)
 ////////////////// DEPRECATED METHODS ///////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-// WARNING: NOT UP TO DATE (Missing good matrix permutations)
-float getPixelDitherThreshold4x4(DitherInfo d)
-{
-    uint randomOffset = uint(getObjectHash() * 7919);
-
-    uint2 p = d.pixel;
-    if (gRotatePattern)
-        p = applyRotation(p, d.frameIndex, 4, 4);
-    
-    // TODO replace lookup with precomputed matrices
-    p.x += randomOffset % 4u;
-    p.y += randomOffset / 4u;
-    p = p % 4u;
-
-    return (ditherMatrix[p.y][p.x] + getTopNoise(d)) / 16.0;
-}
+// NOTE: getPixelDitherThreshold4x4 is now defined above with proper permutation support (line 328)
 
 float getSTBNThreshold(DitherInfo d)
 {
@@ -785,4 +852,207 @@ float evalHashGrid2D(DitherInfo d, float g_HashScale, bool rotate = false)
     #else
     return 0.5;
     #endif
+}
+
+// ============================================================================
+// ADTF (Adaptive Dithering Transparency Framework) Implementation
+// ============================================================================
+
+// Debug visualization colors
+#define DEBUG_COLOR_2X2 float4(1.0, 0.0, 0.0, 1.0)  // Red - coarse dithering
+#define DEBUG_COLOR_3X3 float4(0.0, 1.0, 0.0, 1.0)  // Green - medium dithering
+#define DEBUG_COLOR_4X4 float4(0.0, 0.0, 1.0, 1.0)  // Blue - fine dithering
+#define DEBUG_COLOR_MISS float4(0.0, 0.0, 0.0, 1.0)  // Black - no hit
+
+// Structure to hold adaptive factors for visualization
+struct AdaptiveFactors
+{
+    float depthFactor;
+    float freqFactor;
+    float alphaFactor;
+    float adaptiveScore;
+    uint matrixSize;
+};
+
+// Select adaptive matrix size based on alpha precision and screen-space frequency
+// Hybrid Strategy: combines alpha precision needs with screen frequency analysis
+//
+// Key insights:
+// - Low alpha (near 0): needs FINE matrix (4x4) for precise threshold distribution
+// - High alpha (near 1): can use COARSE matrix (2x2)
+// - High frequency areas (edges, details): can use COARSE matrix (error less visible)
+// - Low frequency areas (flat regions): need FINE matrix (patterns more visible)
+//
+// Result: high score = need fine matrix (4x4), low score = can use coarse (2x2)
+uint selectAdaptiveMatrixSize(float rayT, float2 derivatives, float alpha, out AdaptiveFactors factors)
+{
+    // Alpha precision factor: low alpha needs more precision
+    // alphaFactor = 1.0 when alpha=0 (need fine), 0.0 when alpha=1 (can be coarse)
+    factors.alphaFactor = 1.0 - alpha;
+    
+    // Screen-space frequency factor from derivatives
+    // High frequency = high derivative magnitude = error less visible = can use coarse
+    // Low frequency = low derivative magnitude = patterns visible = need fine
+    float freqMagnitude = length(derivatives);
+    // Invert: low freq -> high factor (need fine), high freq -> low factor (can be coarse)
+    factors.freqFactor = 1.0 - saturate(freqMagnitude * gAdaptiveFreqScale);
+    
+    // Depth factor: far objects appear smaller, may need finer matrix
+    // This is optional and can be tuned
+    factors.depthFactor = saturate(rayT / gAdaptiveDepthFar);
+    
+    // Combined score (HIGH = need FINE matrix 4x4, LOW = can use COARSE 2x2)
+    // We prioritize alpha precision over frequency
+    factors.adaptiveScore = factors.alphaFactor * gAdaptiveAlphaWeight
+                          + factors.freqFactor * gAdaptiveFreqWeight
+                          + factors.depthFactor * gAdaptiveDepthWeight;
+    
+    // Normalize weights
+    float totalWeight = gAdaptiveAlphaWeight + gAdaptiveFreqWeight + gAdaptiveDepthWeight;
+    if (totalWeight > 0.0)
+        factors.adaptiveScore /= totalWeight;
+    
+    // Map score to matrix size
+    // Score 0.66-1.0: 4x4 (fine - low alpha or low frequency)
+    // Score 0.33-0.66: 3x3 (medium)
+    // Score 0.0-0.33: 2x2 (coarse - high alpha and high frequency)
+    if (factors.adaptiveScore > 0.66)
+        factors.matrixSize = 4;  // Fine detail needed
+    else if (factors.adaptiveScore > 0.33)
+        factors.matrixSize = 3;  // Medium
+    else
+        factors.matrixSize = 2;  // Coarse is acceptable
+    
+    return factors.matrixSize;
+}
+
+// Compute motion-aware temporal phase
+uint computeMotionAwarePhase(uint2 pixel, uint frameIndex, uint matrixSize)
+{
+    uint totalPhases = matrixSize * matrixSize;
+    uint basePhase = frameIndex % totalPhases;
+    return basePhase;
+}
+
+// Compute material modulation factor
+float computeMaterialModulation(float alpha)
+{
+    // Alpha-based modulation: low alpha needs tighter threshold distribution
+    float alphaMod = lerp(0.8, 1.2, alpha);
+    return alphaMod;
+}
+
+// Apply material modulation to threshold
+float applyMaterialModulation(float threshold, float modulation)
+{
+    return pow(threshold, 1.0 / clamp(modulation, 0.5, 2.0));
+}
+
+// Compute adaptive noise blend based on frequency
+float computeAdaptiveNoiseBlend(float2 derivatives, float baseBlend)
+{
+    float freqMagnitude = length(derivatives);
+    float freqFactor = saturate(freqMagnitude * gAdaptiveFreqScale);
+    
+    // High frequency: reduce noise blend (rely on structured matrix)
+    // Low frequency: increase noise blend (break up patterns)
+    return lerp(baseBlend * 1.5, baseBlend * 0.3, freqFactor);
+}
+
+// Get debug visualization color
+float4 getDebugVisualizationColor(AdaptiveFactors factors)
+{
+    switch (gDebugVizMode)
+    {
+        case DEBUG_VIZ_MATRIX_SIZE:
+            if (factors.matrixSize == 2) return DEBUG_COLOR_2X2;
+            if (factors.matrixSize == 3) return DEBUG_COLOR_3X3;
+            if (factors.matrixSize == 4) return DEBUG_COLOR_4X4;
+            return DEBUG_COLOR_MISS;
+            
+        case DEBUG_VIZ_DEPTH_FACTOR:
+            return float4(factors.depthFactor, factors.depthFactor, factors.depthFactor, 1.0);
+            
+        case DEBUG_VIZ_FREQ_FACTOR:
+            return float4(factors.freqFactor, factors.freqFactor, factors.freqFactor, 1.0);
+            
+        case DEBUG_VIZ_ALPHA_FACTOR:
+            return float4(factors.alphaFactor, factors.alphaFactor, factors.alphaFactor, 1.0);
+            
+        case DEBUG_VIZ_ADAPTIVE_SCORE:
+            // Heatmap: blue -> green -> yellow -> red
+            float t = saturate(factors.adaptiveScore);
+            float3 heatmap;
+            if (t < 0.33)
+                heatmap = lerp(float3(0, 0, 1), float3(0, 1, 0), t * 3.0);
+            else if (t < 0.66)
+                heatmap = lerp(float3(0, 1, 0), float3(1, 1, 0), (t - 0.33) * 3.0);
+            else
+                heatmap = lerp(float3(1, 1, 0), float3(1, 0, 0), (t - 0.66) * 3.0);
+            return float4(heatmap, 1.0);
+            
+        default:
+            return float4(0.0, 0.0, 0.0, 0.0); // Transparent when disabled
+    }
+}
+
+// Get adaptive dither threshold
+float getAdaptiveDitherThreshold(
+    DitherInfo d,
+    float rayT,
+    float2 ddx,
+    float2 ddy,
+    out AdaptiveFactors factors)
+{
+    // Step 1: Select matrix size
+    uint matrixSize = selectAdaptiveMatrixSize(rayT, ddx, d.alpha, factors);
+    
+    // Step 2: Compute temporal phase
+    uint temporalPhase = computeMotionAwarePhase(d.pixel, d.frameIndex, matrixSize);
+    
+    // Step 3: Get base threshold from selected matrix
+    float baseThreshold;
+    uint randomOffset = uint(getObjectHash() * 7919);
+    
+    if (matrixSize == 2)
+    {
+        uint2 p = d.pixel;
+        if (gRotatePattern)
+            p = applyRotation(p, temporalPhase, 2, 2);
+        p = p % 2u;
+        uint4 mask = get2x2PermutationFromBuffer(randomOffset);
+        uint lookup = p.x + 2u * p.y;
+        baseThreshold = (mask[lookup] + 0.5) / 4.0;
+    }
+    else if (matrixSize == 3)
+    {
+        uint2 p = d.pixel;
+        if (gRotatePattern)
+            p = applyRotation(p, temporalPhase, 3, 3);
+        p = p % 3u;
+        uint3x3 mask = get3x3Permutation(randomOffset);
+        baseThreshold = (mask[p.y][p.x] + 0.5) / 9.0;
+    }
+    else // matrixSize == 4
+    {
+        uint2 p = d.pixel;
+        if (gRotatePattern)
+            p = applyRotation(p, temporalPhase, 4, 4);
+        p = p % 4u;
+        uint4x4 mask = get4x4Permutation(randomOffset);
+        baseThreshold = (mask[p.y][p.x] + 0.5) / 16.0;
+    }
+    
+    // Step 4: Apply material modulation
+    float materialMod = computeMaterialModulation(d.alpha);
+    baseThreshold = applyMaterialModulation(baseThreshold, materialMod);
+    
+    // Step 5: Compute adaptive noise blend
+    float adaptiveNoiseBlend = computeAdaptiveNoiseBlend(ddx, gAdaptiveNoiseBlend);
+    
+    // Step 6: Blend with top noise
+    float topNoise = getTopNoise(d);
+    float finalThreshold = lerp(baseThreshold, topNoise, adaptiveNoiseBlend);
+    
+    return clamp(finalThreshold, 1e-6, 1.0);
 }

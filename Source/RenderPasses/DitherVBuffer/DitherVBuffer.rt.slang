@@ -52,6 +52,9 @@ RWTexture2D<float> gOpacity; // mask for TAA (0 = no transparency)
 #define OPAQUE_MASK 0.9
 RWTexture2D<float4> gColor; // shaded vbuffer
 
+// ADTF Debug Visualization Output (always declared, only used when DEBUG_VIZ_MODE != DEBUG_VIZ_DISABLED)
+RWTexture2D<float4> gDebugViz;
+
 struct RayData
 {
 #ifndef FULL_STOCHASTIC
@@ -282,6 +285,19 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     #endif
     #if DITHER_MODE == DITHER_MODE_SURFACE_STBN
     if (alpha < getHashSTBNThreshold(d))
+        IgnoreHit();
+    #endif
+    #if DITHER_MODE == DITHER_MODE_ADAPTIVE
+    // ADTF: Adaptive Dithering Transparency Framework
+    AdaptiveFactors adaptiveFactors;
+    float adaptiveThreshold = getAdaptiveDitherThreshold(d, RayTCurrent(), ddx, ddy, adaptiveFactors);
+    
+    // Debug visualization output (only write if debug mode enabled)
+    #if DEBUG_VIZ_MODE != DEBUG_VIZ_DISABLED
+    gDebugViz[pixel] = getDebugVisualizationColor(adaptiveFactors);
+    #endif
+    
+    if (alpha < adaptiveThreshold)
         IgnoreHit();
     #endif
 

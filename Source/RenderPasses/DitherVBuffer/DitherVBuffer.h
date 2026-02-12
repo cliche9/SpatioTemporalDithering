@@ -57,6 +57,7 @@ public:
         DitherTemporalAA,
         SpatioTemporalBlueNoise, // Spatiotemporal Blue Noise Masks, Wolfe 2022
         SurfaceSpatioTemporalBlueNoise, // STBN attahed to surface (with HashGrid technique)
+        Adaptive, // ADTF: Adaptive Dithering Transparency Framework
         Disabled = 0xff,
     };
 
@@ -77,6 +78,7 @@ public:
         { DitherMode::SpatioTemporalBlueNoise, "SpatioTemporalBlueNoise" },
         { DitherMode::SurfaceSpatioTemporalBlueNoise, "SurfaceSpatioTemporalBlueNoise" },
         { DitherMode::BlueNoise3D, "BlueNoise3D" },
+        { DitherMode::Adaptive, "Adaptive (ADTF)" },
         
     });
 #else
@@ -92,6 +94,7 @@ public:
     // the implementation of those work, but they have bad results:
     //{ DitherMode::Periodic, "Periodic" },
     //{ DitherMode::BlueNoise3D, "BlueNoise3D" },
+    { DitherMode::Adaptive, "Adaptive (ADTF)" },
 });
 #endif
 
@@ -220,6 +223,26 @@ public:
         {STBNNoise::Vector1D, "Vector1D"},
     });
 
+    // ADTF Debug Visualization Mode
+    enum class DebugVizMode : uint32_t
+    {
+        Disabled,
+        MatrixSize,     // Show selected matrix size as colors (R=2x2, G=3x3, B=4x4)
+        DepthFactor,    // Show depth contribution as grayscale
+        FreqFactor,     // Show frequency contribution as grayscale
+        AlphaFactor,    // Show alpha contribution as grayscale
+        AdaptiveScore,  // Show combined adaptive score as heatmap
+    };
+
+    FALCOR_ENUM_INFO(DebugVizMode, {
+        {DebugVizMode::Disabled, "Disabled"},
+        {DebugVizMode::MatrixSize, "Matrix Size"},
+        {DebugVizMode::DepthFactor, "Depth Factor"},
+        {DebugVizMode::FreqFactor, "Frequency Factor"},
+        {DebugVizMode::AlphaFactor, "Alpha Factor"},
+        {DebugVizMode::AdaptiveScore, "Adaptive Score"},
+    });
+
     static ref<DitherVBuffer> create(ref<Device> pDevice, const Properties& props) { return make_ref<DitherVBuffer>(pDevice, props); }
 
     DitherVBuffer(ref<Device> pDevice, const Properties& props);
@@ -269,7 +292,9 @@ private:
     ref<RtProgramVars> mpVars;
     ref<SampleGenerator> mpSampleGenerator;
     ref<Buffer> mpTransparencyWhitelist;
+    ref<Buffer> mpPermutations2x2Buffer;
     ref<Buffer> mpPermutations3x3Buffer;
+    ref<Buffer> mpPermutations4x4Buffer;
 
     uint mFrameCount = 0;
 
@@ -308,7 +333,16 @@ private:
 
     std::vector<int> mPermutations3x3Scores;
     std::vector<Gui::DropdownValue> mPermutations3x3Dropdown;
-    uint32_t mPermutations3x3Score = 0; 
+    uint32_t mPermutations3x3Score = 0;
+
+    // ADTF (Adaptive Dithering Transparency Framework) parameters
+    float mAdaptiveDepthFar = 100.0f;           // Far plane for depth normalization
+    float mAdaptiveDepthWeight = 0.2f;          // Depth influence weight (minor factor)
+    float mAdaptiveFreqWeight = 0.3f;           // Frequency influence weight
+    float mAdaptiveAlphaWeight = 0.5f;          // Alpha influence weight (primary factor)
+    float mAdaptiveFreqScale = 1.0f;            // Frequency sensitivity scale
+    float mAdaptiveNoiseBlend = 0.1f;           // Base noise blend factor
+    DebugVizMode mDebugVizMode = DebugVizMode::Disabled;  // Debug visualization mode
 };
 
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherMode);
@@ -319,3 +353,4 @@ FALCOR_ENUM_REGISTER(DitherVBuffer::ObjectHashType);
 FALCOR_ENUM_REGISTER(DitherVBuffer::NoiseTopPattern);
 FALCOR_ENUM_REGISTER(DitherVBuffer::RenderScale);
 FALCOR_ENUM_REGISTER(DitherVBuffer::STBNNoise);
+FALCOR_ENUM_REGISTER(DitherVBuffer::DebugVizMode);
