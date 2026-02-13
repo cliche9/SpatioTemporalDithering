@@ -44,20 +44,21 @@ class DitherVBuffer : public RenderPass
 public:
     enum class DitherMode : uint32_t
     {
-        PerPixel2x2,
-        PerPixel3x3,
-        PerPixel4x4,
-        PerJitter,
-        RussianRoulette,
-        Periodic,
-        HashGrid,
-        FractalDithering,
-        BlueNoise3D,
-        PerPixel2x2x2,
-        DitherTemporalAA,
-        SpatioTemporalBlueNoise, // Spatiotemporal Blue Noise Masks, Wolfe 2022
-        SurfaceSpatioTemporalBlueNoise, // STBN attahed to surface (with HashGrid technique)
-        Adaptive, // ADTF: Adaptive Dithering Transparency Framework
+        PerPixel2x2 = 0,
+        PerPixel3x3 = 1,
+        PerPixel4x4 = 2,
+        PerJitter = 3,
+        RussianRoulette = 4,
+        Periodic = 5,
+        HashGrid = 6,
+        FractalDithering = 7,
+        BlueNoise3D = 8,
+        PerPixel2x2x2 = 9,
+        DitherTemporalAA = 10,
+        SpatioTemporalBlueNoise = 11, // Spatiotemporal Blue Noise Masks, Wolfe 2022
+        SurfaceSpatioTemporalBlueNoise = 12, // STBN attahed to surface (with HashGrid technique)
+        Adaptive = 13, // ADTF: Adaptive Dithering Transparency Framework
+        RIS = 14,
         Disabled = 0xff,
     };
 
@@ -79,7 +80,8 @@ public:
         { DitherMode::SurfaceSpatioTemporalBlueNoise, "SurfaceSpatioTemporalBlueNoise" },
         { DitherMode::BlueNoise3D, "BlueNoise3D" },
         { DitherMode::Adaptive, "Adaptive (ADTF)" },
-        
+        { DitherMode::RIS, "RIS" },
+
     });
 #else
     FALCOR_ENUM_INFO(DitherMode, {
@@ -95,6 +97,7 @@ public:
     //{ DitherMode::Periodic, "Periodic" },
     //{ DitherMode::BlueNoise3D, "BlueNoise3D" },
     { DitherMode::Adaptive, "Adaptive (ADTF)" },
+    { DitherMode::RIS, "RIS" },
 });
 #endif
 
@@ -320,6 +323,9 @@ private:
     ref<Texture> mpBayer64Tex;
     ref<Texture> mpSpatioTemporalBlueNoiseTex;
     ref<Texture> mpSpatioTemporalBlueNoiseTex2;
+    ref<Texture> mpRisHistory[2];
+    uint32_t mRisHistoryReadIndex = 0;
+    bool mRisHistoryValid = false;
     NoisePattern mNoisePattern = NoisePattern::Blue;
     NoiseTopPattern mNoiseTopPattern = NoiseTopPattern::StaticBlue;
     STBNNoise mSTBNNoise = STBNNoise::Scalar;
@@ -343,6 +349,10 @@ private:
     float mAdaptiveFreqScale = 1.0f;            // Frequency sensitivity scale
     float mAdaptiveNoiseBlend = 0.1f;           // Base noise blend factor
     DebugVizMode mDebugVizMode = DebugVizMode::Disabled;  // Debug visualization mode
+
+    float mRisRepeatPenalty = 0.15f;
+    float mRisNoveltyBoost = 1.35f;
+
 };
 
 FALCOR_ENUM_REGISTER(DitherVBuffer::DitherMode);

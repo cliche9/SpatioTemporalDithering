@@ -10,7 +10,8 @@
 #define DITHER_MODE_DITHER_TEMPORAL_AA 10
 #define DITHER_MODE_STBN 11
 #define DITHER_MODE_SURFACE_STBN 12
-#define DITHER_MODE_ADAPTIVE 13  // ADTF: Adaptive Dithering Transparency Framework
+#define DITHER_MODE_ADAPTIVE 13 // ADTF: Adaptive Dithering Transparency Framework
+#define DITHER_MODE_RIS 14
 
 // Debug Visualization Modes
 #define DEBUG_VIZ_DISABLED 0
@@ -97,6 +98,25 @@ cbuffer AdaptiveDitherParams
     float gAdaptiveNoiseBlend;    // Base noise blend factor (default: 0.1)
     uint gDebugVizMode;           // Debug visualization mode (0=disabled)
 };
+
+static const uint RIS_TRACE_MODE_COLLECT = 0u;
+static const uint RIS_TRACE_MODE_SHADE = 1u;
+
+bool risUpdateReservoir(float w, inout float weightSum, inout uint candidateCount, inout uint selectedIndex, uint candidateIndex, float rng)
+{
+    candidateCount += 1u;
+    weightSum += w;
+    if (w <= 0.0 || weightSum <= 0.0) return false;
+
+    float p = saturate(w / weightSum);
+    if (rng <= p)
+    {
+        selectedIndex = candidateIndex;
+        return true;
+    }
+
+    return false;
+}
 
 // common variables used in the dithering functions
 struct DitherInfo

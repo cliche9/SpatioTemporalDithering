@@ -42,6 +42,15 @@ cbuffer PerFrame
     int gAlignMotionVectors; // align motion vectors to grid spacing when moving
 }
 
+cbuffer RisTemporalParams
+{
+    float gRisRepeatPenalty;
+    float gRisNoveltyBoost;
+    uint gRisUseHistory;
+}
+
+static const uint kInvalidRisSignature = 0xffffffffu;
+
 #define MIN_VISIBILITY 0.001
 
 StructuredBuffer<uint> gTransparencyWhitelist;
@@ -51,6 +60,8 @@ RWTexture2D<float2> gMotion;
 RWTexture2D<float> gOpacity; // mask for TAA (0 = no transparency)
 #define OPAQUE_MASK 0.9
 RWTexture2D<float4> gColor; // shaded vbuffer
+Texture2D<uint> gRisHistoryIn;
+RWTexture2D<uint> gRisHistoryOut;
 
 // ADTF Debug Visualization Output (always declared, only used when DEBUG_VIZ_MODE != DEBUG_VIZ_DISABLED)
 RWTexture2D<float4> gDebugViz;
@@ -62,7 +73,68 @@ struct RayData
     float rayT; // input: TMax, output: TCurrent
 #endif
     float minAlphaT; // RayT value of closest alpha-blended hit (For TAA mask, not required for DLSS)
+
+    // RIS payload (independent from ADTF)
+    uint risTraceMode;
+    uint risSelectedIndex;
+    uint risCandidateIndex;
+    uint risCandidateCount;
+    float risWeightSum;
+    float risSelectedWeight;
+    float risTransmittance;
+    uint risSelectedInstanceID;
+    uint risSelectedPrimitiveIndex;
+    float2 risSelectedBarycentrics;
+    float risSelectedT;
+    uint risHistorySignature;
 };
+
+uint makeRisSignature(uint instanceID, uint primitiveIndex)
+{
+    uint x = instanceID * 1664525u + 1013904223u;
+    uint y = primitiveIndex * 22695477u + 1u;
+    return x ^ (y + 0x9e3779b9u + (x << 6) + (x >> 2));
+}
+
+uint makeRisSignature(GeometryInstanceID instanceID, uint primitiveIndex)
+{
+    return makeRisSignature(instanceID.index, primitiveIndex);
+}
+
+void risAddCandidate(
+    inout RayData rayData,
+    GeometryInstanceID instanceID,
+    uint primitiveIndex,
+    float2 barycentrics,
+    float3 posW,
+    float alpha,
+    float hitT)
+{
+    if (rayData.risTraceMode != RIS_TRACE_MODE_COLLECT) return;
+
+    const uint candidateIndex = rayData.risCandidateCount;
+    float w = max(0.0, rayData.risTransmittance * alpha);
+    if (gRisUseHistory != 0u)
+    {
+        const uint candidateSignature = makeRisSignature(instanceID, primitiveIndex);
+        if (candidateSignature == rayData.risHistorySignature) w *= max(0.01, gRisRepeatPenalty);
+        else w *= max(1.0, gRisNoveltyBoost);
+    }
+    const float rng = hash4D(float4(posW.xy, float2(posW.z, float(candidateIndex) + 1.0)));
+
+    if (risUpdateReservoir(w, rayData.risWeightSum, rayData.risCandidateCount, rayData.risSelectedIndex, candidateIndex, rng))
+    {
+        rayData.risSelectedWeight = w;
+        rayData.risSelectedInstanceID = instanceID.index;
+        rayData.risSelectedPrimitiveIndex = primitiveIndex;
+        rayData.risSelectedBarycentrics = barycentrics;
+        rayData.risSelectedT = hitT;
+    }
+
+    rayData.risTransmittance *= (1.0 - alpha);
+}
+
+float2 calcMotionVector(uint2 pixel, uint2 frameDim, TriangleHit triangleHit, bool isTransparent);
 
 // posV: view space position (negative z)
 // return: texture uv [0, 1]
@@ -126,6 +198,37 @@ void miss(inout RayData rayData : SV_RayPayload)
     uint2 pixel = DispatchRaysIndex().xy;
     uint2 frameDim = DispatchRaysDimensions().xy;
 
+#if defined(FULL_STOCHASTIC) && (DITHER_MODE == DITHER_MODE_RIS)
+    const float wEnv = max(0.0, rayData.risTransmittance);
+    const float totalW = rayData.risWeightSum + wEnv;
+    bool chooseEnv = false;
+    if (totalW > 0.0)
+    {
+        const float rngFinal = hash4D(float4(float2(pixel), float(gFrameCount), 917.0));
+        chooseEnv = rngFinal <= saturate(wEnv / totalW);
+    }
+
+    if (!chooseEnv && rayData.risCandidateCount > 0u && rayData.risSelectedIndex != 0xffffffffu)
+    {
+        TriangleHit triangleHit;
+        triangleHit.instanceID.index = rayData.risSelectedInstanceID;
+        triangleHit.primitiveIndex = rayData.risSelectedPrimitiveIndex;
+        triangleHit.barycentrics = rayData.risSelectedBarycentrics;
+
+        gVBuffer[pixel] = HitInfo(triangleHit).getData();
+        gMotion[pixel] = calcMotionVector(pixel, frameDim, triangleHit, true);
+        gOpacity[pixel] = OPAQUE_MASK;
+
+        float3 viewDir = -gScene.camera.computeRayPinhole(pixel, frameDim).dir;
+        float3 color = shadeVBuffer(triangleHit, pixel, frameDim, viewDir).rgb;
+        gColor[pixel] = float4(color, 1.0);
+        gRisHistoryOut[pixel] = makeRisSignature(rayData.risSelectedInstanceID, rayData.risSelectedPrimitiveIndex);
+        return;
+    }
+
+    // chooseEnv == true, or no valid transparent candidate -> fall through to envmap shading
+#endif
+
     HitInfo hitInfo = { };
     float3 rayDirNoJitter = gScene.camera.computeRayPinhole(pixel, frameDim, /*no jitter*/false).dir;
     float3 prevEnvMapDir = mul(gScene.camera.data.prevViewMat, float4(rayDirNoJitter, 0.0)).xyz;
@@ -141,6 +244,7 @@ void miss(inout RayData rayData : SV_RayPayload)
     rayData.color.w = 0.0;
     gColor[pixel] = rayData.color;
 #endif
+    gRisHistoryOut[pixel] = kInvalidRisSignature;
 }
 
 bool useRussianRouletteForAlphaTest(RayData rayData)
@@ -197,16 +301,29 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     {
         // use default alpha test if not marked as transparent
         if (gScene.materials.alphaTest(v, materialID, lod))
+        {
             IgnoreHit();
+        }
         return;
     }
 
     let material = gScene.materials.getMaterial(materialID);
     float alpha = material.evalOpacity(gScene.materials, v, lod);
-    if(alpha <= 0.01) IgnoreHit(); // no hit
+    if(alpha <= 0.01)
+    {
+        IgnoreHit();
+        return; // no hit
+    }
+#if defined(FULL_STOCHASTIC) && (DITHER_MODE == DITHER_MODE_RIS)
+    if(alpha >= 1.0) return; // opaque handled in closesthit for proper depth ordering
+#else
     if(alpha >= 1.0) return; // opaque
+#endif
 
-    rayData.minAlphaT = min(rayData.minAlphaT, RayTCurrent()); // store if alpha was encountered
+    if (alpha < 1.0)
+    {
+        rayData.minAlphaT = min(rayData.minAlphaT, RayTCurrent()); // store if alpha was encountered
+    }
 
     #ifndef FULL_BASELINE
 
@@ -226,6 +343,16 @@ void anyHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersectionAt
     if (alpha > 0.320314) fsrAlpha = saturate(-1.0204 + 6.0689 * alpha - 6.7421 * alpha * alpha + 2.6931 * alpha * alpha * alpha);
     else if (alpha < 0.202436) fsrAlpha = saturate(1.3113 * alpha + 0.6793 * alpha * alpha - 10.9520 * alpha * alpha * alpha);
     alpha = lerp(alpha, fsrAlpha, gDLSSCorrectionStrength);
+    #endif
+
+    #if defined(FULL_STOCHASTIC) && (DITHER_MODE == DITHER_MODE_RIS)
+    if (useRussianRouletteForAlphaTest(rayData))
+    {
+        risAddCandidate(rayData, instanceID, PrimitiveIndex(), attribs.barycentrics, v.posW, alpha, RayTCurrent());
+
+        IgnoreHit();
+        return;
+    }
     #endif
 
     DitherInfo d = {};
@@ -336,6 +463,34 @@ void closestHit(inout RayData rayData : SV_RayPayload, BuiltInTriangleIntersecti
     uint2 pixel = DispatchRaysIndex().xy;
     uint2 frameDim = DispatchRaysDimensions().xy;    
 
+#if defined(FULL_STOCHASTIC) && (DITHER_MODE == DITHER_MODE_RIS)
+    const float wOpaque = max(0.0, rayData.risTransmittance);
+    const float totalW = rayData.risWeightSum + wOpaque;
+    bool chooseOpaque = true;
+    if (totalW > 0.0)
+    {
+        const float rngFinal = hash4D(float4(float2(pixel), float(gFrameCount), 613.0));
+        chooseOpaque = rngFinal <= saturate(wOpaque / totalW);
+    }
+
+    if (!chooseOpaque && rayData.risCandidateCount > 0u && rayData.risSelectedIndex != 0xffffffffu && rayData.risSelectedT <= RayTCurrent())
+    {
+        TriangleHit selectedHit;
+        selectedHit.instanceID.index = rayData.risSelectedInstanceID;
+        selectedHit.primitiveIndex = rayData.risSelectedPrimitiveIndex;
+        selectedHit.barycentrics = rayData.risSelectedBarycentrics;
+
+        gVBuffer[pixel] = HitInfo(selectedHit).getData();
+        gMotion[pixel] = calcMotionVector(pixel, frameDim, selectedHit, true);
+        gOpacity[pixel] = OPAQUE_MASK;
+
+        float3 viewDir = -gScene.camera.computeRayPinhole(pixel, frameDim).dir;
+        float3 color = shadeVBuffer(selectedHit, pixel, frameDim, viewDir).rgb;
+        gColor[pixel] = float4(color, 1.0);
+        return;
+    }
+#endif
+
     TriangleHit triangleHit;
     triangleHit.instanceID = getGeometryInstanceID();
     triangleHit.primitiveIndex = PrimitiveIndex();
@@ -374,6 +529,8 @@ void rayGen()
     uint2 pixel = DispatchRaysIndex().xy;
     uint2 frameDim = DispatchRaysDimensions().xy;
 
+    gRisHistoryOut[pixel] = kInvalidRisSignature;
+
     Ray ray = gScene.camera.computeRayPinhole(pixel, frameDim);
 
     RayData data;
@@ -381,8 +538,24 @@ void rayGen()
     #ifndef FULL_STOCHASTIC
     data.color = float4(0, 0, 0, 1); // rbb+visibility
     #endif
+    data.risTraceMode = RIS_TRACE_MODE_SHADE;
+    data.risSelectedIndex = 0xffffffffu;
+    data.risCandidateIndex = 0u;
+    data.risCandidateCount = 0u;
+    data.risWeightSum = 0.0;
+    data.risSelectedWeight = 0.0;
+    data.risTransmittance = 1.0;
+    data.risHistorySignature = kInvalidRisSignature;
     uint rayFlags = 0;
     if (CULL_BACK_FACES) rayFlags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
+
+    #if defined(FULL_STOCHASTIC) && (DITHER_MODE == DITHER_MODE_RIS)
+    data.risTraceMode = RIS_TRACE_MODE_COLLECT;
+    if (gRisUseHistory != 0u)
+    {
+        data.risHistorySignature = gRisHistoryIn[pixel];
+    }
+    #endif
 
     #ifndef FULL_STOCHASTIC
     for (uint i = 0; i < 256; ++i)

@@ -38,7 +38,7 @@ namespace
     const std::string kColorOut = "color";
     const std::string kDebugViz = "debugViz";
 
-    const uint32_t kMaxPayloadSizeBytes = 6 * sizeof(float); // could be optimized to 2*float for FULL_STOCHASTIC, but not measurable in performance
+    const uint32_t kMaxPayloadSizeBytes = 20 * sizeof(float); // covers RayData in non-FULL_STOCHASTIC mode with RIS fields
     const std::string kProgramRaytraceFile = "RenderPasses/DitherVBuffer/DitherVBuffer.rt.slang";
 
     const std::string kUseWhitelist = "useWhitelist";
@@ -147,6 +147,19 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     assert(mpVars);
 
     uint2 frameDim = uint2(pVbuffer->getWidth(), pVbuffer->getHeight());
+
+    if (!mpRisHistory[0] || mpRisHistory[0]->getWidth() != frameDim.x || mpRisHistory[0]->getHeight() != frameDim.y)
+    {
+        const ResourceBindFlags bindFlags = ResourceBindFlags::ShaderResource | ResourceBindFlags::UnorderedAccess;
+        mpRisHistory[0] = Texture::create2D(mpDevice, frameDim.x, frameDim.y, ResourceFormat::R32Uint, 1, 1, nullptr, bindFlags);
+        mpRisHistory[1] = Texture::create2D(mpDevice, frameDim.x, frameDim.y, ResourceFormat::R32Uint, 1, 1, nullptr, bindFlags);
+        mRisHistoryReadIndex = 0;
+        mRisHistoryValid = false;
+    }
+
+    ref<Texture> pRisHistoryIn = mpRisHistory[mRisHistoryReadIndex];
+    ref<Texture> pRisHistoryOut = mpRisHistory[1 - mRisHistoryReadIndex];
+
     mpScene->getCamera()->setPatternGenerator(mpSamplePattern, 1.0f / float2(frameDim));
 
     auto var = mpVars->getRootVar();
@@ -168,6 +181,8 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["gBlueNoise64x64Tex"] = mpBlueNoise64Tex;
     var["gBayerNoise64Tex"] = mpBayer64Tex;
     var["gSpatioTemporalBlueNoiseTex"] = mSTBNNoise == STBNNoise::Scalar ? mpSpatioTemporalBlueNoiseTex : mpSpatioTemporalBlueNoiseTex2;
+    var["gRisHistoryIn"] = pRisHistoryIn;
+    var["gRisHistoryOut"] = pRisHistoryOut;
 
     var["PerFrame"]["gFrameCount"] = mFrameCount++;
     var["PerFrame"]["gDLSSCorrectionStrength"] = mDLSSCorrectionStrength;
@@ -189,6 +204,9 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     var["AdaptiveDitherParams"]["gAdaptiveFreqScale"] = mAdaptiveFreqScale;
     var["AdaptiveDitherParams"]["gAdaptiveNoiseBlend"] = mAdaptiveNoiseBlend;
     var["AdaptiveDitherParams"]["gDebugVizMode"] = uint(mDebugVizMode);
+    var["RisTemporalParams"]["gRisRepeatPenalty"] = mRisRepeatPenalty;
+    var["RisTemporalParams"]["gRisNoveltyBoost"] = mRisNoveltyBoost;
+    var["RisTemporalParams"]["gRisUseHistory"] = (mDitherMode == DitherMode::RIS && mRisHistoryValid) ? 1u : 0u;
 
     LightSettings::get().updateShaderVar(var);
     ShadowSettings::get().updateShaderVar(mpDevice, var);
@@ -236,6 +254,12 @@ void DitherVBuffer::execute(RenderContext* pRenderContext, const RenderData& ren
     dispatch.x = pVbuffer->getWidth();
     dispatch.y = pVbuffer->getHeight();
     mpScene->raytrace(pRenderContext, mpProgram.get(), mpVars, dispatch);
+
+    if (mDitherMode == DitherMode::RIS)
+    {
+        mRisHistoryReadIndex = 1 - mRisHistoryReadIndex;
+        mRisHistoryValid = true;
+    }
 
     // add whitelist to dict
     if (mUseTransparencyWhitelist)
@@ -339,6 +363,15 @@ void DitherVBuffer::renderUI(Gui::Widgets& widget)
         }
     }
 
+    if (mDitherMode == DitherMode::RIS)
+    {
+        if (auto g = widget.group("RIS Temporal Bias"))
+        {
+            g.slider("Repeat Penalty", mRisRepeatPenalty, 0.01f, 1.0f);
+            g.slider("Novelty Boost", mRisNoveltyBoost, 1.0f, 3.0f);
+        }
+    }
+
     if (auto g = widget.group("Permutations"))
     {
         if(g.dropdown("Score: ", mPermutations3x3Dropdown, mPermutations3x3Score))
@@ -398,6 +431,10 @@ void DitherVBuffer::setScene(RenderContext* pRenderContext, const ref<Scene>& pS
     mpScene = pScene;
     setupProgram();
     mUseTransparencyWhitelist = updateWhitelistBuffer();
+    mpRisHistory[0] = nullptr;
+    mpRisHistory[1] = nullptr;
+    mRisHistoryReadIndex = 0;
+    mRisHistoryValid = false;
 }
 
 void DitherVBuffer::setFractalDitherPattern(DitherPattern pattern)
